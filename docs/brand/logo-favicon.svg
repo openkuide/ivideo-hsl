@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ivideo-hls">
+  <title>ivideo-hls</title>
+
+  <!-- Favicon rules: solid colors only (no gradient stops survive at 16px),
+       no outline stroke (would thin and disappear on scale-down), thicker
+       seams so the segment metaphor still reads. -->
+
+  <rect width="32" height="32" rx="6" fill="#111827"/>
+
+  <!-- Three horizontal segments approximating a play triangle. Each band
+       is a trapezoid shaped by two points on the hypotenuse; computed so
+       the right tip lines up at x=26, y=16. -->
+  <g fill="#7C3AED">
+    <!-- Top band: y=6..12 -->
+    <polygon points="7,6 18,6 22,12 7,12"/>
+  </g>
+  <g fill="#A855F7">
+    <!-- Upper middle: y=13..17 (contains the point) -->
+    <polygon points="7,13 23,13 26,16 23,19 7,19"/>
+  </g>
+  <g fill="#22D3EE">
+    <!-- Bottom band: y=20..26 -->
+    <polygon points="7,20 22,20 18,26 7,26"/>
+  </g>
+</svg>

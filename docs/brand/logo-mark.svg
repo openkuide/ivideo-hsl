@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="ivideo-hls mark">
+  <title>ivideo-hls mark</title>
+  <desc>Transparent-background mark: segmented play triangle only.</desc>
+
+  <defs>
+    <linearGradient id="ivh-grad-mark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+    <clipPath id="ivh-triangle-mark">
+      <path d="M 64 44 L 64 212 L 208 128 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- No background chip. Use this variant when the host system supplies
+       its own colored surface (GitLab sidebar, docs navbar, slide deck). -->
+
+  <g clip-path="url(#ivh-triangle-mark)" fill="url(#ivh-grad-mark)">
+    <rect x="40" y="44"  width="184" height="36"/>
+    <rect x="40" y="86"  width="184" height="36"/>
+    <rect x="40" y="128" width="184" height="36"/>
+    <rect x="40" y="170" width="184" height="36"/>
+  </g>
+</svg>

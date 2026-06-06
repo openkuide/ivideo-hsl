@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="ivideo-hls logo">
+  <title>ivideo-hls (light)</title>
+  <desc>Play triangle sliced into HLS segment bands, violet to cyan, on a light panel.</desc>
+
+  <defs>
+    <linearGradient id="ivh-grad-light" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+    <clipPath id="ivh-triangle-light">
+      <path d="M 64 44 L 64 212 L 208 128 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Light panel for GitHub/README hero rendering where a dark chip would
+       clash. Same geometry as the master so swaps are trivial. -->
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="2"/>
+
+  <g clip-path="url(#ivh-triangle-light)" fill="url(#ivh-grad-light)">
+    <rect x="40" y="44"  width="184" height="36"/>
+    <rect x="40" y="86"  width="184" height="36"/>
+    <rect x="40" y="128" width="184" height="36"/>
+    <rect x="40" y="170" width="184" height="36"/>
+  </g>
+
+  <!-- Dark outline for the light version so the triangle doesn't dissolve
+       into the pale panel. -->
+  <path d="M 64 44 L 64 212 L 208 128 Z"
+        fill="none" stroke="#111827" stroke-width="5" stroke-linejoin="round"/>
+</svg>

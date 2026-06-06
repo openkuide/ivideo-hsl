@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="ivideo-hls logo">
+  <title>ivideo-hls</title>
+  <desc>A play triangle sliced into four HLS segment bands, violet to cyan.</desc>
+
+  <defs>
+    <!-- Palette matches the TUI: #7C3AED violet → #22D3EE cyan, same as the
+         progress-bar gradient so the logo reads as the same product. -->
+    <linearGradient id="ivh-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+
+    <!-- Triangle mask: play shape with a generous optical center. The
+         vertices are inset from the 256×256 canvas so strokes and corner
+         radii don't touch the edge. -->
+    <clipPath id="ivh-triangle">
+      <path d="M 64 44 L 64 212 L 208 128 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded background square. Use currentColor-safe solid so the icon
+       works equally on GitLab's white sidebar and dark docs pages. When the
+       consumer wants a transparent background, they use logo-transparent
+       (not currently shipped; just omit this rect in their own copy). -->
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#111827"/>
+
+  <!-- The four HLS segment bands, clipped to the play triangle. Narrow
+       horizontal gaps between bands are the segment seams. -->
+  <g clip-path="url(#ivh-triangle)" fill="url(#ivh-grad)">
+    <rect x="40" y="44"  width="184" height="36"/>
+    <rect x="40" y="86"  width="184" height="36"/>
+    <rect x="40" y="128" width="184" height="36"/>
+    <rect x="40" y="170" width="184" height="36"/>
+  </g>
+
+  <!-- Crisp triangle outline to stabilise the silhouette at small sizes
+       where the seams might blur together. 2% of the canvas width. -->
+  <path d="M 64 44 L 64 212 L 208 128 Z"
+        fill="none" stroke="#E5E7EB" stroke-width="5" stroke-linejoin="round"/>
+</svg>
