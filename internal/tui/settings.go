@@ -539,7 +539,7 @@ func fieldHint(f settingsField) string {
 	case fieldToken:
 		return "GitHub PAT or equivalent. Stored 0600; $IVIDEO_HLS_TOKEN overrides."
 	case fieldPublicURL:
-		return "HTTP(S) template for urls.txt — how viewers fetch the playlist. {branch}, {filename}. Empty = write local path."
+		return "HTTP(S) template for urls.txt — how viewers fetch the playlist. {branch}, {subdir}, {filename}. Empty = write local path."
 	case fieldSourceDir:
 		return "Folder scanned when no --source / -i / -a is given. Empty = cwd. Auto-created if set."
 	case fieldRecursive:

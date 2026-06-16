@@ -54,9 +54,8 @@ func (w *manifestWriter) writeWorkspaceManifest(cfg *Config, branch string, hlsD
 
 // renderManifestEntry produces the URL line for one HLS output dir. When the
 // pattern is empty, falls back to the local filesystem path.
-// {branch} and {filename} are the only placeholders; {subdir} is derived from
-// the last path component of hlsDir relative to the workspace root so that
-// episode dirs (ep1/, ep2/) produce distinct URLs from the default x/ dir.
+// Placeholders: {branch}, {subdir}, {filename}. {subdir} is the last path
+// component of hlsDir ("x" for single-episode, "ep1"/"ep2"/… for split).
 func renderManifestEntry(pattern, branch, hlsDir string) string {
 	if pattern == "" {
 		return filepath.Join(hlsDir, marriedSingle)

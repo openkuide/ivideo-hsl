@@ -68,7 +68,7 @@ type Config struct {
 	// empty, RemoteURL is used directly. Never log this.
 	PushURL string
 	// PublicURLPattern is the template used to render urls.txt entries.
-	// Placeholders: {branch}, {filename}. Empty = write local path instead.
+	// Placeholders: {branch}, {subdir}, {filename}. Empty = write local path instead.
 	PublicURLPattern string
 }
 

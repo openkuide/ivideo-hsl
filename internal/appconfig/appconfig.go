@@ -58,9 +58,10 @@ type File struct {
 	// stage on retry. Default false — always redo.
 	ResumeReuseCompressed bool
 	// PublicURLPattern is the template used to render each published video's
-	// public URL into urls.txt. Placeholders: {branch}, {filename}.
+	// public URL into urls.txt. Placeholders: {branch}, {subdir}, {filename}.
+	// {subdir} is "x" for single-episode videos and "ep1", "ep2", … for splits.
 	// Empty = fall back to writing the local workspace path.
-	// Example: "https://raw.githubusercontent.com/org/repo/{branch}/x/{filename}"
+	// Example: "https://raw.githubusercontent.com/org/repo/{branch}/{subdir}/{filename}"
 	PublicURLPattern string
 }
 
