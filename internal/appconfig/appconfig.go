@@ -230,6 +230,32 @@ func assign(cfg *File, key, value string) {
 	}
 }
 
+// SaveRunConfig persists only the run-config fields that the picker screen can
+// change (quality, compression, parallel, pre-compress, keep-source). All
+// other fields — remote, token, source dir, etc. — are left as-is. This lets
+// the session choices survive to the next startup without touching credentials.
+//
+// If no config file exists yet the full file is written with zero values for
+// the fields the picker doesn't control; effectively the same as a first Save.
+func SaveRunConfig(quality, compression string, parallel int, preCompress, keepSource bool) error {
+	current, err := Load()
+	if err != nil {
+		return err
+	}
+	if quality != "" {
+		current.DefaultQuality = quality
+	}
+	if compression != "" {
+		current.DefaultCompression = compression
+	}
+	if parallel >= 1 {
+		current.DefaultParallel = parallel
+	}
+	current.DefaultPreCompress = preCompress
+	current.DefaultKeepSource = keepSource
+	return Save(current)
+}
+
 // EffectiveRemoteURL returns the URL to hand to `git push`, with a token
 // injected into the URL's userinfo when appropriate. The original remote URL
 // is returned unchanged for SSH or when no token is available — never log

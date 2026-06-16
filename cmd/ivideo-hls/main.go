@@ -326,6 +326,17 @@ func runPickerFlow(cfg *pipeline.Config, loaded appconfig.File) error {
 			fmt.Println(styleErr.Render("cancelled"))
 			os.Exit(0)
 		}
+		// Persist run-config choices so the next session opens with the same
+		// settings. Failures are non-fatal — the current run still proceeds.
+		if err := appconfig.SaveRunConfig(
+			string(cfg.Quality),
+			string(cfg.Compression),
+			cfg.MaxParallel,
+			cfg.PreCompress,
+			cfg.KeepSource,
+		); err != nil {
+			fmt.Fprintln(os.Stderr, styleErr.Render("warning: could not save run config: "+err.Error()))
+		}
 		return nil
 	}
 }
