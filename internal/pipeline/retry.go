@@ -137,7 +137,7 @@ func (r *Runner) RetryOne(ctx context.Context, c RetryCandidate) error {
 	if err := r.forcePush(ctx, jc); err != nil {
 		return err
 	}
-	defaultManifestWriter.recordSuccess(r.cfg, jc.videoPath, jc.branch, jc.workspace, jc.job, r.emitter)
+	defaultManifestWriter.recordSuccess(r.cfg, jc.videoPath, jc.branch, discoverHLSDirs(jc.workspace), jc.job, r.emitter)
 	r.stepFinalize(jc)
 	success(r.emitter, jc.job, StageDone, "retry complete")
 	return nil

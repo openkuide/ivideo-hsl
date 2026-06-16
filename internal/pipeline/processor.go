@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,11 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
+
+// errSplitHandled is a sentinel returned by stepConvert when a file was split
+// into per-part sub-jobs that each handled their own commit/push. The caller
+// (processOne) treats this as a clean success, not an error.
+var errSplitHandled = errors.New("split: per-part jobs complete")
 
 type Result struct {
 	Video   string
@@ -115,6 +121,7 @@ type jobContext struct {
 	branch     string
 	workspace  string
 	finalInput string // may differ from videoPath when pre-compression runs
+	hlsDirs    []string // HLS output dirs, one per episode; populated by stepConvert
 }
 
 func newJobContext(videoPath string) *jobContext {
@@ -145,13 +152,21 @@ func (r *Runner) processOne(ctx context.Context, videoPath string) {
 		r.stepCommitAndPush,
 	}
 	for _, step := range steps {
-		if err := step(ctx, jc); err != nil {
+		err := step(ctx, jc)
+		if errors.Is(err, errSplitHandled) {
+			// per-part sub-jobs already committed, pushed, and wrote manifests
+			r.stepFinalize(jc)
+			success(r.emitter, jc.job, StageDone, "complete (split into parts)")
+			r.addResult(Result{Video: videoPath, Success: true})
+			return
+		}
+		if err != nil {
 			r.failJob(jc, err)
 			return
 		}
 	}
 
-	defaultManifestWriter.recordSuccess(r.cfg, jc.videoPath, jc.branch, jc.workspace, jc.job, r.emitter)
+	defaultManifestWriter.recordSuccess(r.cfg, jc.videoPath, jc.branch, jc.hlsDirs, jc.job, r.emitter)
 	r.stepFinalize(jc)
 	success(r.emitter, jc.job, StageDone, "complete")
 	r.addResult(Result{Video: videoPath, Success: true})
@@ -221,12 +236,90 @@ func (r *Runner) stepPreCompress(ctx context.Context, jc *jobContext) error {
 
 func (r *Runner) stepConvert(ctx context.Context, jc *jobContext) error {
 	return r.runCPU(ctx, func() error {
-		return convertToHLS(ctx, jc.finalInput, jc.workspace, r.cfg, jc.job, r.emitter)
+		episodes, err := splitIntoEpisodes(ctx, jc.finalInput, jc.job, r.emitter)
+		if err != nil {
+			return err
+		}
+
+		if len(episodes) == 1 && episodes[0].suffix == "" {
+			// no split — convert into the normal workspace
+			if err := convertToHLS(ctx, episodes[0].path, jc.workspace, r.cfg, jc.job, r.emitter); err != nil {
+				return err
+			}
+			jc.hlsDirs = []string{filepath.Join(jc.workspace, "x")}
+			return nil
+		}
+
+		// split — each part gets its own branch, workspace, convert, and push
+		for _, ep := range episodes {
+			if err := r.processEpisodePart(ctx, jc, ep); err != nil {
+				return err
+			}
+		}
+		// signal to the caller that per-part jobs handled everything
+		jc.hlsDirs = nil
+		return errSplitHandled
 	})
 }
 
+// processEpisodePart runs the full convert→commit→push cycle for one split
+// part. The part branch is named <base><suffix> (e.g. "episode_3a") and gets
+// its own workspace so it pushes to a separate branch, identical to how an
+// unsplit file would be handled.
+func (r *Runner) processEpisodePart(ctx context.Context, parent *jobContext, ep episode) error {
+	partBranch := parent.branch + ep.suffix
+	partJob := parent.job + ep.suffix
+
+	info(r.emitter, partJob, StageConvert, fmt.Sprintf("processing part %s → branch %s", ep.suffix, partBranch))
+
+	pjc := &jobContext{
+		videoPath:  ep.path,
+		job:        partJob,
+		branch:     partBranch,
+		finalInput: ep.path,
+	}
+
+	// reuse a dedicated workspace for this part
+	ws, err := setupWorkspace(ctx, ep.path, r.cfg, partJob, r.emitter)
+	if err != nil {
+		return fmt.Errorf("part %s workspace: %w", ep.suffix, err)
+	}
+	pjc.workspace = ws
+	removeGitLocks(ws)
+	if err := configureRemoteOrigin(ctx, ws, r.cfg.RemoteURL, r.emitter, partJob); err != nil {
+		warn(r.emitter, partJob, StageWorkspace, err.Error())
+	}
+
+	r.syncMainBestEffort(ctx, pjc)
+	if err := runQuiet(ctx, ws, "git", "checkout", "-B", partBranch); err != nil {
+		return fmt.Errorf("part %s checkout: %w", ep.suffix, err)
+	}
+
+	if err := convertToHLS(ctx, ep.path, ws, r.cfg, partJob, r.emitter); err != nil {
+		_ = os.Remove(ep.path)
+		return fmt.Errorf("part %s convert: %w", ep.suffix, err)
+	}
+	pjc.hlsDirs = []string{filepath.Join(ws, "x")}
+	_ = os.Remove(ep.path) // temp split file no longer needed
+
+	defaultManifestWriter.writeWorkspaceManifest(r.cfg, partBranch, pjc.hlsDirs, partJob, r.emitter)
+	if err := r.stageAndCommit(ctx, pjc); err != nil {
+		return fmt.Errorf("part %s commit: %w", ep.suffix, err)
+	}
+	if r.cfg.Push {
+		if err := r.forcePush(ctx, pjc); err != nil {
+			return fmt.Errorf("part %s push: %w", ep.suffix, err)
+		}
+	}
+	defaultManifestWriter.recordSuccess(r.cfg, parent.videoPath, partBranch, pjc.hlsDirs, partJob, r.emitter)
+	if r.cfg.Cleanup {
+		cleanupWorkspace(ws, r.emitter, partJob)
+	}
+	return nil
+}
+
 func (r *Runner) stepCommitAndPush(ctx context.Context, jc *jobContext) error {
-	defaultManifestWriter.writeWorkspaceManifest(r.cfg, jc.branch, jc.workspace, jc.job, r.emitter)
+	defaultManifestWriter.writeWorkspaceManifest(r.cfg, jc.branch, jc.hlsDirs, jc.job, r.emitter)
 	if err := r.stageAndCommit(ctx, jc); err != nil {
 		return err
 	}

@@ -10,17 +10,34 @@
 
 ---
 
+## Table of Contents
+
+- [How it works](#how-it-works)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Build](#build)
+- [Run](#run)
+- [Usage](#usage)
+  - [Interactive TUI](#interactive-tui)
+  - [Non-interactive (CI / batch)](#non-interactive-ci--batch)
+  - [Common flags](#common-flags)
+- [Recovery](#recovery)
+- [Screens](#screens)
+- [Documentation](#documentation)
+
+---
+
 ## How it works
 
 For each video, ivideo-hls runs a 7-stage pipeline:
 
 ```mermaid
 flowchart LR
-    src["📂 ./input/\n*.mp4"] --> ws["📁 workspace\nclone hero/"]
-    ws --> enc["⚙️ ffmpeg\nHLS convert"]
-    enc --> rn["✂️ rename\n.ts→.married\n.m3u8→.single"]
-    rn --> push["🚀 git push\nbranch per video"]
-    push --> done["✅ done\ncleanup"]
+    src["📂 ./input/<br/>*.mp4"] --> ws["📁 workspace<br/>clone hero/"]
+    ws --> enc["⚙️ ffmpeg<br/>HLS convert"]
+    enc --> rn["✂️ rename<br/>.ts→.married<br/>.m3u8→.single"]
+    rn --> push["🚀 git push<br/>branch per video"]
+    push --> done["✅ done<br/>cleanup"]
 
     classDef src  fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
     classDef proc fill:#D1FAE5,stroke:#059669,stroke-width:2px,color:#064E3B;
@@ -58,6 +75,22 @@ go build -o ivideo-hls ./cmd/ivideo-hls
 ./ivideo-hls doctor
 
 # Run
+./ivideo-hls
+```
+
+---
+
+## Build
+
+```bash
+go build -o ivideo-hls ./cmd/ivideo-hls
+```
+
+---
+
+## Run
+
+```bash
 ./ivideo-hls
 ```
 
