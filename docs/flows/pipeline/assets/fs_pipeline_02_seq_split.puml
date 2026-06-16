@@ -1,0 +1,104 @@
+@startuml fs_pipeline_02_seq_split
+
+skinparam backgroundColor #FFFFFF
+skinparam sequenceMessageAlign center
+skinparam defaultFontColor #1E1B4B
+skinparam defaultFontName "JetBrains Mono"
+skinparam defaultFontSize 12
+skinparam arrowColor #4F46E5
+skinparam sequenceLifeLineBorderColor #6366F1
+skinparam noteBackgroundColor #FFF7ED
+skinparam noteBorderColor #F59E0B
+skinparam noteFontColor #1E1B4B
+skinparam sequenceDividerBackgroundColor #E0E7FF
+skinparam sequenceDividerFontColor #3730A3
+skinparam sequenceDividerBorderColor #6366F1
+skinparam sequenceGroupBorderColor #6366F1
+skinparam sequenceGroupFontColor #3730A3
+skinparam sequenceGroupBodyBackgroundColor #F5F3FF
+
+autonumber "<color:#4F46E5>[00]</color>"
+
+participant "Runner" as RN #EEF2FF
+participant "ffprobe" as FBE #FFFBEB
+participant "ffmpeg splitter" as FSP #FFFBEB
+participant "EpisodeWorker" as EW #F0FDF4
+participant "Git" as GIT #EFF6FF
+participant "Remote" as REM #FDF4FF
+
+RN -> RN : splitIntoEpisodes(ctx, finalInput)\n[cpuSem held by stepConvert]
+RN -> RN : probeSize via os.Stat(finalInput)
+
+group No split -- normal path [fileSize <= 2 GiB]
+  RN --> RN : return [{path: finalInput, suffix: ""}]\nproceeds to convertToHLS on normal workspace
+end
+
+RN -> FBE : ffprobe -show_entries format=duration\n-of default=noprint_wrappers=1:nokey=1 finalInput
+activate FBE
+FBE --> RN : totalDuration (seconds)
+deactivate FBE
+
+RN -> RN : numParts = ceil(fileSize / 2 GiB)\npartDur = totalDuration / numParts\nlog: "file X.XX GB > 2 GB -- splitting into N parts of ~Xs each"
+
+loop for i = 0 to numParts-1
+  RN -> RN : suf = partSuffix(i)\n[0->a, 1->b, ..., 25->z, 26->aa, ...]\nstart = i * partDur\noutPath = dir/basename+suf+.mp4
+
+  RN -> FSP : ffmpeg -ss start -i finalInput\n-c copy -avoid_negative_ts make_zero\n[-t partDur, omitted for last part]\n-y outPath
+  activate FSP
+  FSP --> RN : exit 0 -- outPath written
+  deactivate FSP
+
+  RN -> EW : processEpisodePart(ctx, parent, ep{path:outPath, suffix:suf})
+  activate EW
+
+  EW -> EW : partBranch = parent.branch + suf\npartJob = parent.job + suf
+
+  EW -> GIT : setupWorkspace: cp hero/ hero_partJob/\ngit clean -fd, git reset --hard HEAD\ngit checkout main\nconfigureRemoteOrigin\nremoveGitLocks
+  activate GIT
+  GIT --> EW : workspace = hero_partJob/
+  deactivate GIT
+
+  EW -> GIT : git checkout main; git pull origin main\n[syncMainBestEffort -- allowed to fail]
+  GIT --> EW : ok or ignored
+
+  EW -> GIT : git checkout -B partBranch
+  activate GIT
+  GIT --> EW : on branch partBranch
+  deactivate GIT
+
+  EW -> FSP : ffmpeg -i outPath\n-c:v libx264 -c:a aac\n-hls_time 6 -hls_playlist_type vod\n-hls_segment_filename x/index_%03d.ts\nx/index.m3u8
+  activate FSP
+  FSP --> EW : x/index_NNN.ts ... x/index.m3u8
+  deactivate FSP
+
+  EW -> EW : renameSegments: index_NNN.ts -> index_NNN.married\nrewritePlaylist: index.m3u8 -> index.single\n[refs rewritten, original deleted]
+
+  EW -> EW : os.Remove(outPath)\n[temp split file deleted after convert succeeds]
+
+  EW -> EW : writeWorkspaceManifest(cfg, partBranch, hlsDirs)\n[write x/urls.txt before staging]
+
+  EW -> GIT : git add .\ngit diff --cached --quiet\ngit commit -m "a"
+  activate GIT
+  GIT --> EW : committed
+  deactivate GIT
+
+  EW -> REM : git push -u -f pushURL partBranch\n[netSem acquired -- credentials in positional arg]
+  activate REM
+  REM --> EW : push accepted
+  deactivate REM
+
+  EW -> EW : recordSuccess(cfg, parent.videoPath, partBranch, hlsDirs)\n[manifestWriter.mu acquired -- append to sourceDir/urls.txt]
+
+  EW -> EW : cleanupWorkspace: rm -rf hero_partJob/\n[if cfg.Cleanup == true]
+
+  EW --> RN : nil (part suf complete)
+  deactivate EW
+end
+
+RN -> RN : jc.hlsDirs = nil\nreturn errSplitHandled
+
+RN -> RN : stepFinalize:\n  cleanupWorkspace (parent, if any)\n  maybeDeleteCompressed\n  maybeDeleteSource\n  [source deleted only when Push+Cleanup+!KeepSource]
+
+RN --> RN : addResult{Success: true}\nsuccess log: "complete (split into parts)"
+
+@enduml

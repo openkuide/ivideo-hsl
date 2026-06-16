@@ -6,7 +6,25 @@ Quick diagnosis — always start here:
 ./ivideo-hls doctor
 ```
 
-`doctor` runs every read-only check and prints a ✓/!/✗ report with a fix hint. If it's green, the environment is healthy.
+`doctor` runs 13 read-only checks and prints a ✓/!/✗ report with a fix hint. If it's green, the environment is healthy.
+
+---
+
+## Table of Contents
+
+- [Common issues](#common-issues)
+  - [ffmpeg not found](#ffmpeg-not-found)
+  - [git push rejected](#git-push-rejected)
+  - [SSH agent has no keys](#ssh-agent-has-no-keys)
+  - [ffmpeg is very slow / CPU overloaded](#ffmpeg-is-very-slow--cpu-overloaded)
+  - [Workspace left on disk after crash](#workspace-left-on-disk-after-crash)
+  - [Source .mp4 missing but workspace exists](#source-mp4-missing-but-workspace-exists)
+  - [doctor reports config file not present](#doctor-reports-config-file-not-present)
+  - [Remote URL is unreachable](#remote-url-is-unreachable)
+  - [Token visible in error output](#token-visible-in-error-output)
+  - [Build fails: wrong Go version](#build-fails-wrong-go-version)
+- [Windows](#windows)
+- [Still stuck?](#still-stuck)
 
 ---
 
@@ -44,32 +62,19 @@ apt install ffmpeg         # Debian / Ubuntu
 error: failed to push some refs
 ```
 
-**Causes and fixes:**
+Decision tree:
 
-```mermaid
-flowchart TD
-    push(["❌ git push rejected"])
-    ssh{"Using SSH?"}
-    agent{"SSH agent\nhas keys?"}
-    pat{"HTTPS + PAT?"}
-    perm{"Remote accepts\nforce-push?"}
-
-    push --> ssh
-    ssh -->|yes| agent
-    ssh -->|no| pat
-
-    agent -->|"❌ no keys"| fix_ssh["ssh-add ~/.ssh/id_ed25519\nthen retry-failed"]
-    agent -->|"✅ keys loaded"| perm
-    pat -->|"expired / wrong"| fix_pat["Rotate token in GitHub\nUpdate via --settings or $IVIDEO_HLS_TOKEN\nthen retry-failed"]
-    perm -->|"❌ push rules block it"| fix_perm["Check branch protection rules\nin the remote repository settings"]
-    perm -->|"✅ ok"| fix_other["Check remote URL:\nivideo-hls doctor"]
-
-    classDef bad  fill:#FEE2E2,stroke:#EF4444,color:#7F1D1D;
-    classDef fix  fill:#D1FAE5,stroke:#059669,color:#064E3B;
-    classDef dec  fill:#FEF3C7,stroke:#D97706,color:#78350F;
-    class push bad;
-    class fix_ssh,fix_pat,fix_perm,fix_other fix;
-    class ssh,agent,pat,perm dec;
+```
+[git push rejected]
+        │
+        ├── Using SSH?
+        │       ├── SSH agent has keys? NO  →  ssh-add ~/.ssh/id_ed25519
+        │       └── SSH agent has keys? YES
+        │               └── Remote accepts force-push? NO  →  check branch protection rules
+        │
+        └── Using HTTPS + PAT?
+                └── Token expired / wrong  →  rotate token in GitHub
+                                               update via --settings or $IVIDEO_HLS_TOKEN
 ```
 
 After fixing auth, use `retry-failed` — no re-encoding needed:
@@ -120,7 +125,6 @@ The CPU semaphore hard-caps concurrent ffmpeg processes to `-j N`. The push pool
 
 This is **by design** — ivideo-hls preserves the workspace so you don't lose work.
 
-**What to do:**
 ```bash
 # 1. See what's waiting
 ./ivideo-hls doctor
@@ -231,22 +235,21 @@ go build ./...      # retry
 ## Windows
 
 > [!WARNING]
-> ivideo-hls has **no native Windows support**. It relies on POSIX shell assumptions, SSH agent behaviour, and `os.Rename` semantics that differ on Windows. Running the binary directly on Windows is unsupported and untested.
+> ivideo-hls has **no native Windows support**. It relies on POSIX shell assumptions, SSH agent behaviour, and `os.Rename` semantics that differ on Windows.
 
-### Recommended: WSL2 (Windows Subsystem for Linux)
+### Recommended: WSL2
 
-WSL2 gives you a full Linux environment on Windows and is the supported path.
+WSL2 gives you a full Linux environment and is the supported path.
 
 **Step 1 — Install WSL2**
 
 Open PowerShell as Administrator:
-
 ```powershell
 wsl --install
 # Restart when prompted
 ```
 
-This installs Ubuntu by default. After restart, launch **Ubuntu** from the Start menu and complete the first-run setup.
+This installs Ubuntu by default.
 
 **Step 2 — Install Go inside WSL2**
 
@@ -255,7 +258,7 @@ wget https://go.dev/dl/go1.25.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.25.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
-go version   # should print go1.25+
+go version
 ```
 
 **Step 3 — Install git**
@@ -271,32 +274,26 @@ git config --global user.email "you@example.com"
 ```bash
 ssh-keygen -t ed25519 -C "you@example.com"
 cat ~/.ssh/id_ed25519.pub   # copy → add to GitHub Settings → SSH keys
-ssh -T git@github.com       # verify: should print "Hi username!"
+ssh -T git@github.com
 ```
 
-**Step 5 — Build and run ivideo-hls**
+**Step 5 — Build and run**
 
 ```bash
-git clone git@github.com:iblogger855/ivideo-hsl.git
-cd ivideo-hsl
+git clone git@github.com:ichamrong/ivideo-hls.git
+cd ivideo-hls
 go build -o ivideo-hls ./cmd/ivideo-hls
-./ivideo-hls install-deps   # download ffmpeg + ffprobe
-./ivideo-hls doctor         # verify environment
-./ivideo-hls                # run
+./ivideo-hls install-deps
+./ivideo-hls doctor
+./ivideo-hls
 ```
 
-**Accessing Windows files from WSL2**
-
-Your Windows drives are mounted under `/mnt/`:
-
+**Accessing Windows files from WSL2:**
 ```bash
-# Copy videos from Windows Downloads into WSL2 input folder
 cp /mnt/c/Users/YourName/Downloads/*.mp4 ./input/
 ```
 
 ### Alternative: Docker
-
-If you prefer not to use WSL2, run ivideo-hls inside a Linux container:
 
 ```dockerfile
 FROM golang:1.25-bookworm
@@ -309,9 +306,6 @@ RUN go build -o ivideo-hls ./cmd/ivideo-hls
 docker build -t ivideo-hls .
 docker run --rm -v C:\Videos:/app/input -it ivideo-hls ./ivideo-hls -a --no-tui
 ```
-
-> [!NOTE]
-> SSH auth inside Docker requires forwarding your SSH agent into the container. See [Docker SSH agent forwarding](https://docs.docker.com/engine/security/ssh/) for details.
 
 ---
 

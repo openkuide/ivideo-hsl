@@ -1,32 +1,43 @@
 # Configuration reference
 
-Every configuration value in ivideo-hls can be set in three ways.
-**Precedence** (highest → lowest):
+## Table of Contents
 
-```mermaid
-flowchart LR
-    flag["🚩 CLI flag\n--remote / --token / --source"]
-    env["🌍 Environment variable\n$IVIDEO_HLS_REMOTE\n$IVIDEO_HLS_TOKEN\n$IVIDEO_HLS_SOURCE"]
-    file["📄 Config file\n~/.config/ivideo-hls/config.toml"]
-    default["⚙️ Built-in default"]
+- [Precedence](#precedence)
+- [Config file location](#config-file-location)
+- [All configuration keys](#all-configuration-keys)
+  - [Remote](#remote)
+  - [Source](#source)
+  - [Run defaults](#run-defaults)
+  - [Recovery](#recovery)
+- [Quality presets](#quality-presets)
+- [Environment variables](#environment-variables)
+- [Example config.toml](#example-configtoml)
+- [Related docs](#related-docs)
 
-    flag -->|"highest"| eff([effective value])
-    env  -->|"next"| eff
-    file -->|"next"| eff
-    default -->|"fallback"| eff
+---
 
-    classDef src fill:#E0F2FE,stroke:#0EA5E9,stroke-width:2px,color:#0C4A6E;
-    classDef out fill:#D1FAE5,stroke:#059669,stroke-width:2px,color:#064E3B,font-weight:bold;
-    class flag,env,file,default src;
-    class eff out;
+## Precedence
+
+Every setting can be provided in three ways. Highest wins:
+
 ```
+CLI flag          (--remote / --token / --source)
+       ↓
+Environment var   ($IVIDEO_HLS_REMOTE / $IVIDEO_HLS_TOKEN / $IVIDEO_HLS_SOURCE)
+       ↓
+Config file       (~/.config/ivideo-hls/config.toml)
+       ↓
+Built-in default
+```
+
+Sequence diagram: [`flows/config/assets/fs_config_01_seq_settings.puml`](flows/config/assets/fs_config_01_seq_settings.puml)
 
 ---
 
 ## Config file location
 
 ```
-~/.config/ivideo-hls/config.toml   (default)
+~/.config/ivideo-hls/config.toml          (default)
 $XDG_CONFIG_HOME/ivideo-hls/config.toml   (if XDG_CONFIG_HOME is set)
 ```
 
@@ -48,7 +59,7 @@ File mode is `0600`. Open the TUI editor with:
 | `remote_url` | `--remote URL` | `$IVIDEO_HLS_REMOTE` | `git@github.com:username/repo.git` | Git push destination. SSH or HTTPS. |
 | `auth_method` | *(settings only)* | — | `ssh` | `ssh` or `https`. Controls token injection. |
 | `token` | `--token STR` | `$IVIDEO_HLS_TOKEN` | *(unset)* | HTTPS PAT. Injected into the push URL at runtime, never written to `git remote`. Stored plaintext at `0600`. |
-| `playback_url` | *(settings only)* | — | *(unset)* | HTTP(S) template for `urls.txt`. Placeholders: `{branch}`, `{filename}`. |
+| `playback_url` | *(settings only)* | — | *(unset)* | HTTP(S) template for `urls.txt`. Placeholders: `{branch}`, `{filename}`, `{subdir}`. |
 
 ### Source
 
@@ -79,11 +90,11 @@ File mode is `0600`. Open the TUI editor with:
 
 ## Quality presets
 
-| Preset | Resolution | Video bitrate | Audio bitrate | ffmpeg `-preset` |
+| Preset | Resolution | Video bitrate | Buffer size | Audio bitrate |
 |---|---|---|---|---|
-| `low` | 480p (`-2:480`) | 800k | 96k | `balanced` |
-| `medium` *(default)* | 720p (`-2:720`) | 2800k | 128k | `balanced` |
-| `high` | 1080p (`-2:1080`) | 5000k | 192k | `balanced` |
+| `low` | 480p (`-2:480`) | 800k | 1600k | 96k |
+| `medium` *(default)* | 720p (`-2:720`) | 2800k | 5600k | 128k |
+| `high` | 1080p (`-2:1080`) | 5000k | 10000k | 192k |
 
 Compression preset (`-c`) overrides the ffmpeg `-preset` independently:
 
@@ -132,6 +143,7 @@ resume_reuse_compressed = false
 
 ## Related docs
 
-- [`USAGE.md`](USAGE.md) — operator guide and keybindings.
-- [`PROCESS.md`](PROCESS.md) — end-to-end lifecycle and recovery flow.
-- [`../README.md`](../README.md) — quick-start and flag reference table.
+- [`flows/config/fs_config_01_settings.md`](flows/config/fs_config_01_settings.md) — settings TUI flow spec
+- [`USAGE.md`](USAGE.md) — operator guide and keybindings
+- [`PROCESS.md`](PROCESS.md) — end-to-end lifecycle and recovery flow
+- [`../README.md`](../README.md) — quick-start and flag reference table

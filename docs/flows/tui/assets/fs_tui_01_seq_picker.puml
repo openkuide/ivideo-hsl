@@ -1,0 +1,146 @@
+@startuml fs_tui_01_seq_picker
+
+skinparam backgroundColor #FFFFFF
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam roundcorner 6
+
+skinparam participant {
+  BackgroundColor #EEF2FF
+  BorderColor #6366F1
+  FontColor #1E1B4B
+}
+
+skinparam sequence {
+  ArrowColor #4F46E5
+  ArrowFontColor #3730A3
+  DividerBackgroundColor #E0E7FF
+  DividerBorderColor #6366F1
+  DividerFontColor #3730A3
+  GroupBackgroundColor #F5F3FF
+  GroupBorderColor #6366F1
+  GroupFontColor #3730A3
+  LifeLineBorderColor #6366F1
+  LifeLineBackgroundColor #F8FAFC
+  NoteBackgroundColor #FFF7ED
+  NoteBorderColor #F59E0B
+  NoteFontColor #1E1B4B
+}
+
+autonumber "<color:#4F46E5>[00]</color>"
+
+participant "User" as User #FDF4FF
+participant "PickerTUI" as PickerTUI #EEF2FF
+participant "RunConfigTUI" as RunConfigTUI #EEF2FF
+participant "DashboardTUI" as DashboardTUI #EEF2FF
+participant "Runner" as Runner #F0FDF4
+
+== Phase 1 — Video Selection ==
+
+User -> PickerTUI : launch ivideo-hls
+activate PickerTUI
+
+PickerTUI -> PickerTUI : resolve source directory\n(flag > config > cwd)
+PickerTUI -> PickerTUI : scan source dir for\nsupported video files
+PickerTUI --> User : render file list\n(checkbox + name + size)
+
+loop navigation
+  User -> PickerTUI : press up/down or j/k
+  PickerTUI --> User : move cursor
+end
+
+group filter mode
+  User -> PickerTUI : press /
+  PickerTUI --> User : show filter prompt
+  User -> PickerTUI : type substring
+  PickerTUI --> User : narrow list in real time
+  User -> PickerTUI : press esc
+  PickerTUI --> User : clear filter, restore full list
+end
+
+User -> PickerTUI : press space (toggle file)
+PickerTUI --> User : update checkbox state
+
+User -> PickerTUI : press a (select all)
+PickerTUI --> User : all files selected
+
+User -> PickerTUI : press enter (>= 1 selected)
+PickerTUI -> RunConfigTUI : transition with selectedVideos[]
+
+== Phase 2 — Run Configuration ==
+
+activate RunConfigTUI
+RunConfigTUI -> RunConfigTUI : pre-populate fields\nfrom merged config
+RunConfigTUI --> User : render config form\n(parallel, quality, compression, flags)
+
+loop field adjustment
+  User -> RunConfigTUI : press up/down to focus field
+  User -> RunConfigTUI : press left/right to adjust value
+  RunConfigTUI --> User : update field display
+end
+
+User -> RunConfigTUI : press space (toggle bool field)
+RunConfigTUI --> User : flip boolean state
+
+alt user presses esc
+  User -> RunConfigTUI : press esc
+  RunConfigTUI -> PickerTUI : return to picker
+  deactivate RunConfigTUI
+else user confirms
+  User -> RunConfigTUI : press enter
+  RunConfigTUI -> Runner : start pipeline\n(selectedVideos[], runOptions)
+  deactivate RunConfigTUI
+  activate Runner
+  RunConfigTUI -> DashboardTUI : transition to dashboard
+end
+
+== Phase 3 — Execution ==
+
+activate DashboardTUI
+DashboardTUI --> User : render dashboard\n(system header + job bars + activity log)
+
+loop per video job
+  Runner -> Runner : acquire semaphore slot
+  Runner -> Runner : run PROBE stage
+  Runner --> DashboardTUI : emit JobEvent stage=PROBE pct=100
+  DashboardTUI --> User : update progress bar
+
+  Runner -> Runner : run COMPRESS stage (if pre-compress)
+  Runner --> DashboardTUI : emit JobEvent stage=COMPRESS pct=...
+  DashboardTUI --> User : update progress bar
+
+  Runner -> Runner : run SEGMENT stage (ffmpeg HLS)
+  Runner --> DashboardTUI : emit JobEvent stage=SEGMENT pct=...
+  DashboardTUI --> User : update progress bar with speed + bitrate
+
+  Runner -> Runner : run COMMIT stage (git add + commit)
+  Runner --> DashboardTUI : emit JobEvent stage=COMMIT pct=100
+  DashboardTUI --> User : update progress bar
+
+  Runner -> Runner : run PUSH stage (git push branch)
+  Runner --> DashboardTUI : emit JobEvent stage=PUSH pct=...
+  DashboardTUI --> User : update progress bar
+
+  Runner --> DashboardTUI : emit JobEvent state=DONE
+  DashboardTUI --> User : bar turns green, log OK entry
+  Runner -> Runner : release semaphore slot
+end
+
+alt user presses ctrl+c during execution
+  User -> DashboardTUI : press ctrl+c
+  DashboardTUI -> Runner : cancel context
+  Runner -> Runner : signal all goroutines via ctx.Done
+  Runner --> DashboardTUI : emit JobEvent state=CANCELLED per job
+  DashboardTUI --> User : bars turn dim gray
+  deactivate Runner
+end
+
+Runner --> DashboardTUI : all jobs terminal
+deactivate Runner
+
+DashboardTUI --> User : show final summary\nenable q key
+
+User -> DashboardTUI : press q
+deactivate DashboardTUI
+
+@enduml

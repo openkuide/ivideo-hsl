@@ -1,0 +1,177 @@
+@startuml fs_config_01_seq_settings
+
+skinparam backgroundColor #FFFFFF
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam roundcorner 6
+
+skinparam participant {
+  BackgroundColor #EEF2FF
+  BorderColor #6366F1
+  FontColor #1E1B4B
+}
+
+skinparam sequence {
+  ArrowColor #4F46E5
+  ArrowFontColor #3730A3
+  DividerBackgroundColor #E0E7FF
+  DividerBorderColor #6366F1
+  DividerFontColor #3730A3
+  GroupBackgroundColor #F5F3FF
+  GroupBorderColor #6366F1
+  GroupFontColor #3730A3
+  LifeLineBorderColor #6366F1
+  LifeLineBackgroundColor #F8FAFC
+  NoteBackgroundColor #FFF7ED
+  NoteBorderColor #F59E0B
+  NoteFontColor #1E1B4B
+}
+
+autonumber "<color:#4F46E5>[00]</color>"
+
+participant "User" as User #FDF4FF
+participant "SettingsTUI" as SettingsTUI #EEF2FF
+participant "ConfigLoader" as ConfigLoader #EEF2FF
+participant "Filesystem" as Filesystem #EFF6FF
+participant "GitRemote" as GitRemote #F0FDF4
+
+== Phase 1 — Load ==
+
+User -> SettingsTUI : open settings\n(s key from Picker or config subcommand)
+activate SettingsTUI
+
+SettingsTUI -> ConfigLoader : Load()
+activate ConfigLoader
+
+ConfigLoader -> Filesystem : stat config.toml\n(XDG_CONFIG_HOME or ~/.config/ivideo-hls/)
+activate Filesystem
+Filesystem --> ConfigLoader : file info (exists / not found)
+deactivate Filesystem
+
+alt config file exists
+  ConfigLoader -> Filesystem : read config.toml
+  activate Filesystem
+  Filesystem --> ConfigLoader : raw TOML bytes
+  deactivate Filesystem
+  ConfigLoader -> ConfigLoader : parse TOML into Config struct
+else config file not found
+  ConfigLoader -> ConfigLoader : use built-in defaults
+end
+
+ConfigLoader -> ConfigLoader : merge env vars\n(IVIDEO_HLS_REMOTE, IVIDEO_HLS_TOKEN, IVIDEO_HLS_SOURCE)
+ConfigLoader -> ConfigLoader : merge CLI flag overrides\n(highest precedence)
+
+ConfigLoader --> SettingsTUI : Config (merged)
+deactivate ConfigLoader
+
+SettingsTUI -> SettingsTUI : bind config to form model\nannotate env/flag overrides
+SettingsTUI --> User : render settings editor\n(all fields, token masked)
+
+== Phase 2 — Edit ==
+
+loop field editing
+  User -> SettingsTUI : press up/down to focus field
+  SettingsTUI --> User : highlight focused field
+
+  alt bool field
+    User -> SettingsTUI : press space
+    SettingsTUI -> SettingsTUI : flip bool, set dirty=true
+    SettingsTUI --> User : update field display + show asterisk in title
+  else enum field
+    User -> SettingsTUI : press left/right
+    SettingsTUI -> SettingsTUI : cycle enum value, set dirty=true
+    SettingsTUI --> User : update field display
+  else integer field
+    User -> SettingsTUI : press left/right
+    SettingsTUI -> SettingsTUI : increment/decrement, set dirty=true
+    SettingsTUI --> User : update field display
+  else string field
+    User -> SettingsTUI : press enter
+    SettingsTUI -> SettingsTUI : activate inline text input
+    SettingsTUI --> User : show editable text cursor
+    User -> SettingsTUI : type value, press enter to confirm
+    SettingsTUI -> SettingsTUI : store new value, set dirty=true
+    SettingsTUI --> User : exit text input, show updated value
+  end
+end
+
+User -> SettingsTUI : press d (reset to defaults)
+SettingsTUI -> SettingsTUI : restore built-in defaults, set dirty=true
+SettingsTUI --> User : all fields reset + asterisk shown
+
+== Phase 3 — Save / Test ==
+
+alt user presses s (save)
+  User -> SettingsTUI : press s
+  SettingsTUI -> ConfigLoader : Save(formValues)
+  activate ConfigLoader
+  ConfigLoader -> ConfigLoader : serialise to TOML bytes
+
+  ConfigLoader -> Filesystem : write to temp file
+  activate Filesystem
+  Filesystem --> ConfigLoader : temp file written
+  ConfigLoader -> Filesystem : os.Rename(temp, config.toml)
+  Filesystem --> ConfigLoader : rename OK
+  ConfigLoader -> Filesystem : os.Chmod(config.toml, 0600)
+  Filesystem --> ConfigLoader : chmod OK
+  deactivate Filesystem
+
+  ConfigLoader --> SettingsTUI : save OK
+  deactivate ConfigLoader
+
+  SettingsTUI -> SettingsTUI : set dirty=false
+  SettingsTUI --> User : show [OK] saved confirmation\nremove asterisk from title
+
+else user presses t (test remote)
+  User -> SettingsTUI : press t
+  SettingsTUI -> GitRemote : Test(remote_url, timeout=10s)
+  activate GitRemote
+
+  GitRemote -> GitRemote : exec git ls-remote <remote_url>\nwith 10-second context deadline
+
+  alt remote reachable
+    GitRemote --> SettingsTUI : success (refs listed)
+    SettingsTUI --> User : append [OK] remote reachable to log
+  else timeout or auth failure
+    GitRemote --> SettingsTUI : error (exit code / timeout)
+    SettingsTUI --> User : append [ERROR] test failed to log
+  end
+  deactivate GitRemote
+
+else user exits with unsaved changes
+  User -> SettingsTUI : press esc / q / ctrl+c
+  SettingsTUI -> SettingsTUI : check dirty flag
+
+  group unsaved-exit prompt
+    SettingsTUI --> User : show prompt\ns=save+exit  d=discard+exit  esc=back
+
+    alt user presses s
+      User -> SettingsTUI : press s
+      SettingsTUI -> ConfigLoader : Save(formValues)
+      activate ConfigLoader
+      ConfigLoader -> Filesystem : atomic write + chmod 0600
+      activate Filesystem
+      Filesystem --> ConfigLoader : OK
+      deactivate Filesystem
+      ConfigLoader --> SettingsTUI : save OK
+      deactivate ConfigLoader
+      SettingsTUI --> User : exit settings, return to caller
+      deactivate SettingsTUI
+    else user presses d
+      User -> SettingsTUI : press d
+      SettingsTUI -> SettingsTUI : discard in-memory changes
+      SettingsTUI --> User : exit settings, return to caller
+      deactivate SettingsTUI
+    else user presses esc
+      User -> SettingsTUI : press esc
+      SettingsTUI --> User : dismiss prompt, return to editor
+    end
+  end
+
+else user exits with no unsaved changes
+  User -> SettingsTUI : press esc / q
+  SettingsTUI --> User : exit settings, return to caller
+  deactivate SettingsTUI
+end
+
+@enduml

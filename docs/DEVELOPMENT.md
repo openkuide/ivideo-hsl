@@ -4,6 +4,21 @@ Everything you need to build, run, test, and extend ivideo-hls.
 
 ---
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Build](#build)
+- [Project layout](#project-layout)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [Running locally](#running-locally)
+- [Testing](#testing)
+- [Adding features](#adding-features)
+- [Code conventions](#code-conventions)
+- [Commit style](#commit-style)
+- [Related docs](#related-docs)
+
+---
+
 ## Prerequisites
 
 | Tool | Minimum version | Install |
@@ -18,8 +33,8 @@ Everything you need to build, run, test, and extend ivideo-hls.
 
 ```bash
 # Clone
-git clone git@github.com:iblogger855/ivideo-hsl.git
-cd ivideo-hsl
+git clone git@github.com:ichamrong/ivideo-hls.git
+cd ivideo-hls
 
 # Build binary
 go build -o ivideo-hls ./cmd/ivideo-hls
@@ -48,10 +63,14 @@ internal/
     events.go         ← Event · Emitter interface · level helpers
     exec.go           ← run / runQuiet / runCapture wrappers
     ffmpeg.go         ← compress · HLS convert · rename stages
+    ffprobe.go        ← duration probe
     git.go            ← lock cleanup · remote config · branch pruning
-    manifest.go       ← urls.txt writer
+    manifest.go       ← urls.txt writer (multi-episode aware)
     processor.go      ← Runner orchestrator · CPU/net semaphores
+    redact.go         ← credential scrubbing patterns
+    retry.go          ← retry-failed + resume-failed logic
     scan.go           ← video discovery · extension allowlist
+    split.go          ← auto-split for files >2GB
     workspace.go      ← hero_* lifecycle · clone · reset · cleanup
   tui/
     picker.go         ← two-screen video checklist + config selector
@@ -59,43 +78,45 @@ internal/
     settings.go       ← persistent config TUI editor
     styles.go         ← ALL Lipgloss color definitions (single source of truth)
 
-docs/                 ← architecture · PRD · process · usage · this file
-scripts/              ← install-hooks.sh · other dev helpers
+docs/
+  flows/
+    pipeline/         ← fs_pipeline_*.md + assets/*.puml (HLS + split specs)
+    tui/              ← fs_tui_*.md + assets/*.puml
+    recovery/         ← fs_recovery_*.md + assets/*.puml
+    config/           ← fs_config_*.md + assets/*.puml
+  ARCHITECTURE.md
+  CONFIGURATION.md
+  DEVELOPMENT.md  ← this file
+  PROCESS.md
+  TROUBLESHOOTING.md
+  USAGE.md
 ```
 
 ### Golden rule
 
 > **`internal/pipeline` must never import `internal/tui` or `cmd/`.**
 
-All pipeline output flows through `pipeline.Emitter`. The TUI is a consumer of events, not the other way around. Violating this breaks the CI/plain-log path and the concurrency model.
+All pipeline output flows through `pipeline.Emitter`. The TUI is a consumer of events, not the other way around.
 
 ---
 
 ## Architecture at a glance
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full colored diagram. High-level:
-
-```mermaid
-graph LR
-    cli["🟣 cmd/ivideo-hls"]
-    tui["🔵 internal/tui"]
-    core["🟢 internal/pipeline"]
-    libs["🟠 appconfig · deps · doctor"]
-
-    cli --> tui
-    cli --> core
-    tui --> core
-    core --> libs
-
-    classDef cliStyle  fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#3B0764;
-    classDef uiStyle   fill:#E0F2FE,stroke:#0EA5E9,stroke-width:2px,color:#0C4A6E;
-    classDef coreStyle fill:#D1FAE5,stroke:#059669,stroke-width:2px,color:#064E3B;
-    classDef libStyle  fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
-    class cli cliStyle;
-    class tui uiStyle;
-    class core coreStyle;
-    class libs libStyle;
 ```
+cmd/ivideo-hls  (Cobra · flag parsing · prereq checks)
+       │
+       ├── internal/tui  (Bubble Tea picker + run dashboard)
+       │         │
+       │         └── pipeline.Emitter  ← events flow up
+       │
+       └── internal/pipeline  (Runner · stages · semaphores)
+                 │
+                 ├── ffmpeg  (compress · convert · split)
+                 ├── git     (workspace · branch · push)
+                 └── fs      (manifest · scan · redact)
+```
+
+Full colored diagram: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ---
 
@@ -124,12 +145,19 @@ cp ~/Downloads/test.mp4 input/
 go test ./...
 ```
 
-> **Note:** The test suite is minimal today — `go test ./...` runs clean but coverage is thin. A table-driven test for `ffmpeg.go` argument construction and a fake-exec harness for `processor.go` are the first targets for contributors.
+Existing test coverage:
+- `internal/pipeline/ffprobe_test.go` — duration probe
+- `internal/pipeline/parallel_test.go` — semaphore accounting
+- `internal/pipeline/redact_test.go` — credential scrubbing
+- `internal/pipeline/scan_test.go` — extension allowlist, recursive pruning
+- `internal/pipeline/reuse_test.go` — reuse-compressed policy
+- `internal/pipeline/finalize_test.go` — cleanup conditions
+- `internal/pipeline/manifest_test.go` — multi-episode urls.txt writes
+- `internal/pipeline/split_test.go` — auto-split threshold and suffix logic
 
-Useful areas to cover:
+Priority areas for new tests:
 - `internal/pipeline/ffmpeg.go` — `compressArgs`, `hlsArgs`, `settingsFor`
-- `internal/pipeline/scan.go` — extension allowlist, recursive pruning
-- `internal/pipeline/processor.go` — semaphore accounting (fake exec)
+- `internal/pipeline/processor.go` — full pipeline with fake-exec harness
 - `internal/appconfig/` — TOML round-trip, precedence
 
 ---
@@ -142,12 +170,13 @@ Useful areas to cover:
 2. Add a branch in `settingsFor()` in `internal/pipeline/ffmpeg.go`.
 3. Add a label in `internal/tui/picker.go` config screen.
 
-### New stage (e.g. thumbnail)
+### New pipeline stage (e.g. thumbnail)
 
 1. Add a `Stage*` constant in `internal/pipeline/events.go`.
 2. Emit events from `internal/pipeline/processor.go`.
 3. Add the stage to `stageProgress` so the progress bar covers it.
 4. Add a weight to `stageRange` so the percentage math stays consistent.
+5. Write a flow spec in `docs/flows/pipeline/`.
 
 ### New flag
 
@@ -172,8 +201,9 @@ Do not use `lipgloss.Color(...)` inline anywhere else — that is a bug. Add a n
 | Styles in one place | `internal/tui/styles.go` only |
 | Atomic file writes | Write to `.partial`, rename on clean exit |
 | Semaphore discipline | ffmpeg → `cpuSem`; git push → `netSem`; workspace clone → neither |
-| Token hygiene | Scrub secrets before any `Emit()` call |
+| Token hygiene | Scrub secrets before any `Emit()` call — see `redact.go` |
 | Branch names | `basename(video) − ".mp4"` — invariant, no sanitization |
+| Split branch names | `<base><suffix>` e.g. `lesson-01a` — suffix is the part letter |
 | Rename step | `.ts → .married`, `.m3u8 → .single` — invariant, paired downstream |
 
 ---
@@ -199,7 +229,8 @@ chore: bump go.mod to 1.25
 
 ## Related docs
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — package layout, invariants, event surface.
-- [CONFIGURATION.md](CONFIGURATION.md) — all config keys, env vars, precedence.
-- [PROCESS.md](PROCESS.md) — end-to-end lifecycle and recovery decision tree.
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — contribution guidelines and PR process.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — package layout, invariants, event surface
+- [`CONFIGURATION.md`](CONFIGURATION.md) — all config keys, env vars, precedence
+- [`PROCESS.md`](PROCESS.md) — end-to-end lifecycle and recovery decision tree
+- [`flows/pipeline/fs_pipeline_01_hls_convert.md`](flows/pipeline/fs_pipeline_01_hls_convert.md) — pipeline stage spec
+- [`flows/pipeline/fs_pipeline_02_split.md`](flows/pipeline/fs_pipeline_02_split.md) — auto-split spec

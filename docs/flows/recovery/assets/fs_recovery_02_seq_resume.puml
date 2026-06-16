@@ -1,0 +1,118 @@
+@startuml fs_recovery_02_seq_resume
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #4F46E5
+skinparam sequenceLifeLineBorderColor #6366F1
+skinparam sequenceParticipantBorderThickness 2
+skinparam sequenceGroupBorderThickness 1
+skinparam sequenceGroupBorderColor #6366F1
+skinparam sequenceGroupBackgroundColor #F5F3FF
+skinparam sequenceGroupFontColor #3730A3
+skinparam noteBorderColor #F59E0B
+skinparam noteBackgroundColor #FFF7ED
+skinparam noteFontColor #1E1B4B
+skinparam sequenceArrowFontColor #3730A3
+skinparam sequenceLifeLineBackgroundColor #F8FAFC
+skinparam defaultFontColor #1E1B4B
+
+title <color:#4F46E5><b>FS-RECOVERY-02 — resume-failed: Encode Recovery</b></color>
+
+box "Operator" #FDF4FF
+  participant Operator #FDF4FF
+end box
+
+box "ResumeCmd" #EEF2FF
+  participant ResumeCmd #EEF2FF
+end box
+
+box "ffprobe" #FFFBEB
+  participant ffprobe #FFFBEB
+end box
+
+box "Filesystem" #F0FDF4
+  participant Filesystem #F0FDF4
+end box
+
+box "Runner" #F0FDF4
+  participant Runner #F0FDF4
+end box
+
+autonumber "<color:#4F46E5>[00]</color>"
+
+== Phase 1 — Discovery ==
+
+Operator -> ResumeCmd : ivideo-hls resume-failed
+ResumeCmd -> Filesystem : scan hero_*/ directories
+Filesystem --> ResumeCmd : directory listing
+
+ResumeCmd -> Filesystem : inspectIncomplete for each hero_*/
+note right of ResumeCmd : qualify: has .git AND no x/index.single\nskip: has x/index.single (belongs to retry-failed)
+Filesystem --> ResumeCmd : IncompleteWorkspace list (sorted by name)
+
+group skipped — no candidates
+  ResumeCmd -> Operator : print "no incomplete workspaces"
+  ResumeCmd --> Operator : exit 0
+end
+
+== Phase 2 — Triage ==
+
+loop for each IncompleteWorkspace
+  ResumeCmd -> Filesystem : stat guessSourcePath for source .mp4
+
+  group source missing — skipped
+    Filesystem --> ResumeCmd : not found
+    ResumeCmd -> ResumeCmd : mark candidate as skipped (no source)
+    note right of ResumeCmd : listed in output but not actioned
+  end
+
+  Filesystem --> ResumeCmd : source exists
+  ResumeCmd -> ResumeCmd : check resume_reuse_compressed flag
+
+  alt resume_reuse_compressed=true AND CompressedPath exists
+    ResumeCmd -> Filesystem : stat _compressed.mp4 size
+    Filesystem --> ResumeCmd : size in bytes
+    ResumeCmd -> ffprobe : probe duration of _compressed.mp4
+    ffprobe --> ResumeCmd : duration
+    ResumeCmd -> Filesystem : stat _compressed.partial.mp4 sibling
+    Filesystem --> ResumeCmd : exists or not found
+
+    alt size gt 1KiB AND duration gt 1s AND no partial sibling
+      ResumeCmd -> ResumeCmd : assign to reuseCompressed group
+    else any integrity check failed
+      ResumeCmd -> ResumeCmd : assign to freshEncode group
+    end
+  else flag off or no compressed file
+    ResumeCmd -> ResumeCmd : assign to freshEncode group
+  end
+end
+
+ResumeCmd -> Operator : print candidate table with plan summary
+ResumeCmd -> Operator : Proceed with this plan? [y/N]
+Operator --> ResumeCmd : y
+
+== Phase 3 — Re-run ==
+
+group reuse compressed
+  loop for each reuseCompressed candidate
+    ResumeCmd -> Filesystem : cleanWorkspaceOnly (remove hero_<name>/ only)
+    Filesystem --> ResumeCmd : workspace removed
+    note right of Filesystem : _compressed.mp4 sibling preserved
+  end
+  ResumeCmd -> Runner : NewRunner(PreCompress=false, Videos=compressed paths)
+  Runner -> Runner : run full pipeline from convert stage
+  Runner --> ResumeCmd : results (ok/fail counts)
+end
+
+group full re-run
+  loop for each freshEncode candidate
+    ResumeCmd -> Filesystem : cleanPartialArtifacts (remove hero_<name>/ + _compressed.mp4)
+    Filesystem --> ResumeCmd : artifacts removed
+  end
+  ResumeCmd -> Runner : NewRunner(full config, Videos=source paths)
+  Runner -> Runner : run full pipeline from source
+  note right of Runner : stages: compress -> convert -> commit -> push
+  Runner --> ResumeCmd : results (ok/fail counts)
+end
+
+ResumeCmd -> Operator : summary (N resumed / M failed)
+
+@enduml

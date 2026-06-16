@@ -1,0 +1,142 @@
+@startuml fs_pipeline_01_seq_hls_convert
+
+skinparam backgroundColor #FFFFFF
+skinparam sequenceMessageAlign center
+skinparam defaultFontColor #1E1B4B
+skinparam defaultFontName "JetBrains Mono"
+skinparam defaultFontSize 12
+skinparam arrowColor #4F46E5
+skinparam sequenceLifeLineBorderColor #6366F1
+skinparam noteBackgroundColor #FFF7ED
+skinparam noteBorderColor #F59E0B
+skinparam noteFontColor #1E1B4B
+skinparam sequenceDividerBackgroundColor #E0E7FF
+skinparam sequenceDividerFontColor #3730A3
+skinparam sequenceDividerBorderColor #6366F1
+skinparam sequenceGroupBorderColor #6366F1
+skinparam sequenceGroupFontColor #3730A3
+skinparam sequenceGroupBodyBackgroundColor #F5F3FF
+
+autonumber "<color:#4F46E5>[00]</color>"
+
+participant "Operator" as OP <<actor>> #EEF2FF
+participant "Runner" as RN #EEF2FF
+participant "Workspace" as WS #F0FDF4
+participant "ffmpeg" as FF #FFFBEB
+participant "Git" as GIT #EFF6FF
+participant "Remote" as REM #FDF4FF
+participant "Manifest" as MAN #F0FDF4
+
+== Phase 1 -- Workspace Setup ==
+
+OP -> RN : Run(ctx, videos[])
+activate RN
+
+RN -> WS : prepareBaseHero(ctx, cfg)\n[mutex: baseHeroMu — runs once before fan-out]
+activate WS
+WS -> GIT : git checkout main\ngit branch -D stale-branches
+GIT --> WS : ok
+WS --> RN : base hero ready
+deactivate WS
+
+loop for each video in parallel
+  RN -> WS : setupWorkspace(ctx, videoPath, cfg)
+  activate WS
+  WS -> WS : cp -r hero/ hero_name/
+  WS -> GIT : git clean -fd\ngit reset --hard HEAD\ngit checkout main
+  GIT --> WS : ok
+  WS -> GIT : git remote set-url origin remoteURL
+  GIT --> WS : ok
+  WS -> WS : removeGitLocks\n[drop .git/index.lock if older than 2 min]
+  WS --> RN : workspace = hero_name/
+  deactivate WS
+
+  RN -> GIT : git checkout main\ngit pull origin main\n[syncMainBestEffort -- allowed to fail]
+  GIT --> RN : ok or ignored
+
+  RN -> GIT : git checkout -B videoBasename\n[force-reset branch]
+  activate GIT
+  GIT --> RN : on branch videoBasename
+  deactivate GIT
+
+  == Phase 2 -- Encoding ==
+
+  group optional compress [cfg.PreCompress == true]
+    RN -> FF : ffmpeg -i src -c:v libx264 -crf 28\n-movflags +faststart\n-y name_compressed.partial.mp4\n[cpuSem acquired]
+    activate FF
+    FF --> RN : exit 0
+    deactivate FF
+    RN -> WS : rename partial -- name_compressed.partial.mp4 -> name_compressed.mp4\n[atomic rename on clean exit]
+    WS --> RN : jc.finalInput = name_compressed.mp4
+  end
+
+  RN -> WS : splitIntoEpisodes(ctx, finalInput)\n[probeSize via os.Stat]
+  activate WS
+
+  group no split path [fileSize <= 2 GB]
+    WS --> RN : episodes = [{path: finalInput, suffix: ""}]
+    deactivate WS
+
+    RN -> FF : ffmpeg -i finalInput\n-c:v libx264 -c:a aac\n-hls_time 6 -hls_playlist_type vod\n-hls_segment_filename x/index_%03d.ts\nx/index.m3u8\n[cpuSem held]
+    activate FF
+    FF --> RN : x/index_000.ts ... x/index_NNN.ts\nx/index.m3u8
+    deactivate FF
+
+    RN -> WS : renameSegments: index_NNN.ts -> index_NNN.married
+    activate WS
+    WS --> RN : ok
+    RN -> WS : rewritePlaylist: index.m3u8 -> index.single\n[refs .ts -> .married, original deleted]
+    WS --> RN : ok
+    deactivate WS
+  end
+
+  == Phase 3 -- Publish ==
+
+  RN -> MAN : writeWorkspaceManifest(cfg, branch, hlsDirs)\n[write x/urls.txt before staging]
+  activate MAN
+  MAN --> RN : x/urls.txt written
+  deactivate MAN
+
+  RN -> GIT : git add .
+  activate GIT
+  GIT --> RN : staged
+
+  RN -> GIT : git diff --cached --quiet\n[check nothingToCommit]
+  GIT --> RN : has changes
+
+  RN -> GIT : git commit -m "a"
+  GIT --> RN : committed
+  deactivate GIT
+
+  RN -> REM : git push -u -f pushURL videoBasename\n[netSem acquired -- credentials in positional arg]
+  activate REM
+  REM --> RN : push accepted
+  deactivate REM
+
+  RN -> MAN : recordSuccess(cfg, videoPath, branch, hlsDirs)\n[manifestWriter.mu acquired -- append to sourceDir/urls.txt]
+  activate MAN
+  MAN --> RN : sourceDir/urls.txt appended
+  deactivate MAN
+
+  == Phase 4 -- Cleanup ==
+
+  RN -> WS : cleanupWorkspace: rm -rf hero_name/\n[cfg.Cleanup == true]
+  activate WS
+  WS --> RN : workspace removed
+  deactivate WS
+
+  RN -> WS : maybeDeleteCompressed\n[remove name_compressed.mp4 if PreCompress and push+cleanup+!keepSource]
+  WS --> RN : compressed temp removed
+
+  RN -> WS : maybeDeleteSource: rm videoPath.mp4\n[only when Push+Cleanup+!KeepSource all true]
+  activate WS
+  WS --> RN : source .mp4 deleted
+  deactivate WS
+
+  RN -> OP : Result{Success: true}
+end
+
+RN --> OP : []Result
+deactivate RN
+
+@enduml

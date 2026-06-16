@@ -1,0 +1,107 @@
+@startuml fs_recovery_01_seq_retry
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #4F46E5
+skinparam sequenceLifeLineBorderColor #6366F1
+skinparam sequenceParticipantBorderThickness 2
+skinparam sequenceGroupBorderThickness 1
+skinparam sequenceGroupBorderColor #6366F1
+skinparam sequenceGroupBackgroundColor #F5F3FF
+skinparam sequenceGroupFontColor #3730A3
+skinparam noteBorderColor #F59E0B
+skinparam noteBackgroundColor #FFF7ED
+skinparam noteFontColor #1E1B4B
+skinparam sequenceArrowFontColor #3730A3
+skinparam sequenceLifeLineBackgroundColor #F8FAFC
+skinparam defaultFontColor #1E1B4B
+
+title <color:#4F46E5><b>FS-RECOVERY-01 — retry-failed: Push Recovery</b></color>
+
+box "Operator" #FDF4FF
+  participant Operator #FDF4FF
+end box
+
+box "RetryCmd" #EEF2FF
+  participant RetryCmd #EEF2FF
+end box
+
+box "Workspace" #F0FDF4
+  participant Workspace #F0FDF4
+end box
+
+box "Git" #EFF6FF
+  participant Git #EFF6FF
+end box
+
+box "Remote" #FFF1F2
+  participant Remote #FFF1F2
+end box
+
+box "Manifest" #F0FDF4
+  participant Manifest #F0FDF4
+end box
+
+autonumber "<color:#4F46E5>[00]</color>"
+
+== Phase 1 — Discovery ==
+
+Operator -> RetryCmd : ivideo-hls retry-failed
+RetryCmd -> Workspace : scan hero_*/ directories
+Workspace --> RetryCmd : directory listing
+
+group skipped — no candidates
+  RetryCmd -> Operator : print "no pending retries"
+  RetryCmd --> Operator : exit 0
+end
+
+RetryCmd -> Workspace : inspectWorkspace for each hero_*/
+Workspace -> Git : git rev-parse --abbrev-ref HEAD
+Git --> Workspace : branch name
+Workspace -> Git : stat x/index.single
+Git --> Workspace : file present or absent
+Workspace -> Git : git rev-list @{upstream}..HEAD --count
+Git --> Workspace : commit count (or error = no upstream)
+Workspace --> RetryCmd : RetryCandidate list (sorted by name)
+
+== Phase 2 — Confirmation ==
+
+RetryCmd -> Operator : print candidate table (name, branch, size, remote)
+
+alt --yes flag set
+  RetryCmd -> RetryCmd : skip prompt
+else interactive
+  RetryCmd -> Operator : Push these to <remote>? [y/N]
+  Operator --> RetryCmd : y
+end
+
+== Phase 3 — Push ==
+
+loop for each RetryCandidate
+  RetryCmd -> Git : git push -u -f <effectivePushURL> <branch>
+  Git -> Remote : force-push branch
+  Remote --> Git : push result
+
+  alt push failed
+    Git --> RetryCmd : error
+    RetryCmd -> Operator : print error for candidate
+    note right of RetryCmd : workspace left intact\nfor next retry attempt
+  else push succeeded
+    Git --> RetryCmd : success
+
+    == Phase 4 — Cleanup ==
+
+    RetryCmd -> Manifest : recordSuccess
+    Manifest -> Manifest : renderManifestEntry (PublicURLPattern, branch, hlsDirs)
+    Manifest -> Workspace : append URL line to urls.txt in source dir
+    Workspace --> Manifest : written
+
+    RetryCmd -> Workspace : stepFinalize
+    Workspace -> Workspace : cleanupWorkspace (remove hero_<name>/)
+    Workspace -> Workspace : maybeDeleteCompressed (_compressed.mp4 if pre_compress)
+    Workspace -> Workspace : maybeDeleteSource (source .mp4 if cleanup+push)
+    Workspace --> RetryCmd : done
+  end
+end
+
+RetryCmd -> Operator : summary (N retried / M failed)
+
+@enduml

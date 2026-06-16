@@ -1,21 +1,29 @@
 # Usage guide
 
+## Table of Contents
+
+- [First-run checklist](#first-run-checklist)
+- [Interactive mode](#interactive-mode)
+  - [Screen 1 — Video picker](#screen-1--video-picker)
+  - [Screen 2 — Run config](#screen-2--run-config)
+  - [Screen 3 — Run dashboard](#screen-3--run-dashboard)
+- [Non-interactive (CI / batch)](#non-interactive-ci--batch)
+- [Recovery commands](#recovery-commands)
+- [Settings screen](#settings-screen)
+- [Troubleshooting](#troubleshooting)
+
+---
+
 ## First-run checklist
 
-```mermaid
-flowchart LR
-    a["1️⃣ ffmpeg installed?\nffmpeg -version"]
-    b["2️⃣ git identity set?\ngit config --get user.email"]
-    c["3️⃣ SSH auth works?\nssh -T git@github.com"]
-    d["4️⃣ hero/ base repo\nexists in cwd?"]
-    e["✅ run ivideo-hls"]
-
-    a --> b --> c --> d --> e
-
-    classDef step fill:#E0F2FE,stroke:#0EA5E9,stroke-width:2px,color:#0C4A6E;
-    classDef done fill:#D1FAE5,stroke:#059669,stroke-width:2px,color:#064E3B,font-weight:bold;
-    class a,b,c,d step;
-    class e done;
+```
+1. ffmpeg installed?      ffmpeg -version  (or run: ./ivideo-hls install-deps)
+2. git identity set?      git config --get user.email
+3. SSH auth works?        ssh -T git@github.com
+4. hero/ base repo        exists in cwd
+        │
+        ▼
+   ./ivideo-hls
 ```
 
 Or run the built-in checker:
@@ -63,7 +71,7 @@ cd /path/with/videos
 | `enter` | Go to config screen |
 | `esc` / `q` | Quit |
 
-### Screen 2 — Config
+### Screen 2 — Run config
 
 ```
  ivideo-hls · run config ✦
@@ -72,6 +80,7 @@ cd /path/with/videos
   Quality         medium   ←/→ low · medium · high
   Compression     balanced ←/→ fast · balanced · best
   Pre-compress    [ off ]  space toggle
+  Keep source     [ off ]  space toggle
 
   enter → start pipeline   esc → back
 ```
@@ -80,39 +89,41 @@ cd /path/with/videos
 |---|---|
 | `↑` / `↓` | Move between fields |
 | `←` / `→` | Adjust value |
-| `space` | Toggle pre-compress |
+| `space` | Toggle boolean |
 | `enter` | Start pipeline |
 | `esc` | Back to picker |
 
-### Screen 3 — Run dashboard
+Parallel jobs is capped at `[1, len(selectedVideos)]`.
 
-Live per-job state while the pipeline runs:
+### Screen 3 — Run dashboard
 
 ```
  ivideo-hls · processing · 3/8 done · 12:04 · ETA ~6m · → git@github.com:username/repo.git
- ──────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────
   ████████████████████░░░░░░░░  56%  lesson-02          convert   2.1x  2800k
   ████████████░░░░░░░░░░░░░░░░  38%  lesson-05          compress  1.8x  1400k
   ██░░░░░░░░░░░░░░░░░░░░░░░░░░   8%  lesson-06          workspace
   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░   0%  lesson-07          queued
- ──────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────
  Done
   ✓ lesson-01              3m12s   pushed origin/lesson-01
   ✓ lesson-03              2m48s   pushed origin/lesson-03
- ──────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────
  Log · tail
  12:04:13 [lesson-02] HLS convert @ medium / balanced
  12:04:10 [lesson-06] checkout -B lesson-06
- ──────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────
   ctrl+c cancel  ·  q quit (after done)
 ```
 
-- **Badge** — current stage (`workspace`, `compress`, `convert`, `rename`, `push`, `done`, `failed`).
-- **Progress bar** — filled by stage weight; percent is parsed live from ffmpeg's `-progress` stream.
-- **Speed / bitrate** — encoding speed (`2.1x`) and current bitrate (`2800k`) from ffmpeg.
-- **Activity log** — last 10 events, color-coded by level.
+- **Badge** — current stage: `workspace`, `compress`, `convert`, `rename`, `push`, `done`, `failed`
+- **Progress bar** — filled by stage weight; percent live from ffmpeg `-progress` stream
+- **Speed / bitrate** — encoding speed (`2.1x`) and current bitrate (`2800k`)
+- **Activity log** — last 10 events, color-coded by level
 
-`ctrl+c` cancels in-flight work (ffmpeg / git). `q` exits after all jobs complete.
+`ctrl+c` cancels in-flight work. `q` exits after all jobs complete.
+
+TUI flow spec: [`flows/tui/fs_tui_01_picker.md`](flows/tui/fs_tui_01_picker.md)
 
 ---
 
@@ -163,7 +174,7 @@ See [PROCESS.md](PROCESS.md) for the full decision tree and step-by-step walkthr
 
 ## Settings screen
 
-Press `s` on the picker or run `--settings` to open the persistent config editor:
+Press `s` on the picker or run `--settings`:
 
 ```bash
 ./ivideo-hls --settings
@@ -198,9 +209,11 @@ Press `s` on the picker or run `--settings` to open the persistent config editor
 | `←` / `→` | Adjust value |
 | `space` | Toggle boolean |
 | `s` | Save to `~/.config/ivideo-hls/config.toml` |
-| `t` | Test remote connection (`git ls-remote`) |
+| `t` | Test remote connection (`git ls-remote`, 10s timeout) |
 | `d` | Reset field to default |
-| `esc` | Back to picker |
+| `esc` | Back (prompts if unsaved) |
+
+Settings spec: [`flows/config/fs_config_01_settings.md`](flows/config/fs_config_01_settings.md)
 
 ---
 
@@ -212,8 +225,8 @@ Quick reference:
 
 | Symptom | Fix |
 |---|---|
-| `git push rejected` | Bad SSH auth — run `ssh-add ~/.ssh/id_ed25519` then `retry-failed` |
-| `ffmpeg: not found` | Run `./ivideo-hls install-deps` |
-| Workspace left after crash | By design — inspect `hero_<name>/`, then run `resume-failed` |
+| `git push rejected` | Bad SSH auth — `ssh-add ~/.ssh/id_ed25519` then `retry-failed` |
+| `ffmpeg: not found` | `./ivideo-hls install-deps` |
+| Workspace left after crash | By design — inspect `hero_<name>/`, then `resume-failed` |
 | ffmpeg very slow | Reduce `-j` — CPU semaphore is the throttle |
 | `doctor` shows ssh warning | SSH agent has no keys — run `ssh-add` |
