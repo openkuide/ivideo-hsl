@@ -7,14 +7,14 @@ import (
 
 	"github.com/chamrong/ivideo-hls/internal/app"
 	"github.com/chamrong/ivideo-hls/internal/domain/job"
-	"github.com/chamrong/ivideo-hls/internal/testutil/fakes"
+	"github.com/chamrong/ivideo-hls/internal/ports/portstest"
 )
 
 func TestRecoveryService_FindIncomplete(t *testing.T) {
 	want := []job.IncompleteWorkspace{
 		{Name: "vid1", Workspace: "/ws/vid1", Stage: job.StageConvert},
 	}
-	finder := &fakes.WorkspaceFinder{
+	finder := &portstest.WorkspaceFinder{
 		FindIncompleteFn: func(_ context.Context, scriptDir string) ([]job.IncompleteWorkspace, error) {
 			if scriptDir != "/script" {
 				t.Errorf("want scriptDir=/script, got %q", scriptDir)
@@ -37,7 +37,7 @@ func TestRecoveryService_FindIncomplete(t *testing.T) {
 }
 
 func TestRecoveryService_FindIncomplete_Error(t *testing.T) {
-	finder := &fakes.WorkspaceFinder{
+	finder := &portstest.WorkspaceFinder{
 		FindIncompleteFn: func(_ context.Context, _ string) ([]job.IncompleteWorkspace, error) {
 			return nil, errors.New("scan failed")
 		},
@@ -54,7 +54,7 @@ func TestRecoveryService_FindRetryReady(t *testing.T) {
 	want := []job.RetryWorkspace{
 		{Name: "vid2", Workspace: "/ws/vid2", Branch: "vid2"},
 	}
-	finder := &fakes.WorkspaceFinder{
+	finder := &portstest.WorkspaceFinder{
 		FindRetryReadyFn: func(_ context.Context, scriptDir string) ([]job.RetryWorkspace, error) {
 			if scriptDir != "/script" {
 				t.Errorf("want scriptDir=/script, got %q", scriptDir)
@@ -77,7 +77,7 @@ func TestRecoveryService_FindRetryReady(t *testing.T) {
 }
 
 func TestRecoveryService_FindRetryReady_Error(t *testing.T) {
-	finder := &fakes.WorkspaceFinder{
+	finder := &portstest.WorkspaceFinder{
 		FindRetryReadyFn: func(_ context.Context, _ string) ([]job.RetryWorkspace, error) {
 			return nil, errors.New("scan failed")
 		},

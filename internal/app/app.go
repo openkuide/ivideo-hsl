@@ -13,6 +13,7 @@ type App struct {
 	Recovery   *RecoveryService
 	Config     *ConfigService
 	Runner     *Runner
+	Scanner    ports.VideoScanner
 }
 
 // New constructs a fully-wired App from port adapter implementations.
@@ -30,6 +31,7 @@ func New(
 	ws ports.Workspace,
 	finder ports.WorkspaceFinder,
 	store ports.ConfigStore,
+	scanner ports.VideoScanner,
 ) *App {
 	maxParallel := cfg.MaxParallel
 	if maxParallel < 1 {
@@ -48,5 +50,6 @@ func New(
 		Recovery:   recovery,
 		Config:     config,
 		Runner:     runner,
+		Scanner:    scanner,
 	}
 }

@@ -1,4 +1,4 @@
-package fakes
+package portstest
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 )
 
 type Prober struct {
-	DurationFn  func(ctx context.Context, path string) (time.Duration, error)
-	FileSizeFn  func(path string) int64
+	DurationFn func(ctx context.Context, path string) (time.Duration, error)
+	FileSizeFn func(path string) int64
 }
 
 func (f *Prober) Duration(ctx context.Context, path string) (time.Duration, error) {

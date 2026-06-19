@@ -1,4 +1,4 @@
-package fakes
+package portstest
 
 import (
 	"context"
@@ -13,12 +13,12 @@ type ConvertCall  struct{ InputPath, OutputDir, JobName string }
 type RenameCall   struct{ OutDir, JobName string }
 
 type Encoder struct {
-	CompressFn      func(ctx context.Context, v video.Video, jobName string, e job.Emitter) (string, error)
-	ConvertToHLSFn  func(ctx context.Context, inputPath, outputDir string, cfg settings.Settings, jobName string, e job.Emitter) error
+	CompressFn         func(ctx context.Context, v video.Video, jobName string, e job.Emitter) (string, error)
+	ConvertToHLSFn     func(ctx context.Context, inputPath, outputDir string, cfg settings.Settings, jobName string, e job.Emitter) error
 	RenameHLSOutputsFn func(outDir, jobName string, e job.Emitter) error
-	CompressCalls   []CompressCall
-	ConvertCalls    []ConvertCall
-	RenameCalls     []RenameCall
+	CompressCalls      []CompressCall
+	ConvertCalls       []ConvertCall
+	RenameCalls        []RenameCall
 }
 
 func (f *Encoder) Compress(ctx context.Context, v video.Video, jobName string, e job.Emitter) (string, error) {

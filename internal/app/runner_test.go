@@ -9,11 +9,11 @@ import (
 	"github.com/chamrong/ivideo-hls/internal/domain/job"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
 	"github.com/chamrong/ivideo-hls/internal/domain/video"
-	"github.com/chamrong/ivideo-hls/internal/testutil/fakes"
+	"github.com/chamrong/ivideo-hls/internal/ports/portstest"
 )
 
-func newRunnerFakes() (*fakes.Encoder, *fakes.Prober, *fakes.Splitter, *fakes.Workspace, *fakes.GitRepository, *fakes.ManifestWriter) {
-	return &fakes.Encoder{}, &fakes.Prober{}, &fakes.Splitter{}, &fakes.Workspace{}, &fakes.GitRepository{}, &fakes.ManifestWriter{}
+func newRunnerFakes() (*portstest.Encoder, *portstest.Prober, *portstest.Splitter, *portstest.Workspace, *portstest.GitRepository, *portstest.ManifestWriter) {
+	return &portstest.Encoder{}, &portstest.Prober{}, &portstest.Splitter{}, &portstest.Workspace{}, &portstest.GitRepository{}, &portstest.ManifestWriter{}
 }
 
 func TestRunner_Run_SingleVideo(t *testing.T) {

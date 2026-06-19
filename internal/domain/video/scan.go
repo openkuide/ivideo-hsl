@@ -19,7 +19,9 @@ func IsVideoFile(name string) bool {
 	return videoExts[strings.ToLower(filepath.Ext(name))]
 }
 
-func isIgnoredDir(name string) bool {
+// IsIgnoredDir reports whether a directory name should be skipped during
+// video discovery. Exported so filesystem adapters can reuse domain rules.
+func IsIgnoredDir(name string) bool {
 	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "hero_") {
 		return true
 	}

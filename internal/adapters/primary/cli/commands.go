@@ -19,7 +19,7 @@ func Commands(a *app.App) *cobra.Command {
 		Use:   "ivideo-hls",
 		Short: "Convert and publish videos as HLS to GitHub",
 	}
-	root.AddCommand(runCmd(a), retryCmd(a), resumeCmd(a), doctorCmd())
+	root.AddCommand(runCmd(a), retryCmd(a), resumeCmd(a))
 	return root
 }
 
@@ -49,7 +49,7 @@ func runCmd(a *app.App) *cobra.Command {
 					videos = append(videos, video.NewVideo(p))
 				}
 			} else {
-				scanned, err := scanVideos(cfg.SourceDir, cfg.Recursive)
+				scanned, err := a.Scanner.Scan(cfg.SourceDir, cfg.Recursive)
 				if err != nil {
 					return err
 				}
@@ -124,21 +124,4 @@ func resumeCmd(a *app.App) *cobra.Command {
 	}
 }
 
-func doctorCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "doctor",
-		Short: "Check environment prerequisites",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Println("doctor: not yet wired in hexagonal adapter")
-			return nil
-		},
-	}
-}
 
-func scanVideos(dir string, recursive bool) ([]video.Video, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	return video.ScanVideos(entries, dir, recursive), nil
-}

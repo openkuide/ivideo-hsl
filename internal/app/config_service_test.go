@@ -7,7 +7,7 @@ import (
 	"github.com/chamrong/ivideo-hls/internal/app"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
 	"github.com/chamrong/ivideo-hls/internal/domain/video"
-	"github.com/chamrong/ivideo-hls/internal/testutil/fakes"
+	"github.com/chamrong/ivideo-hls/internal/ports/portstest"
 )
 
 func TestConfigService_Load(t *testing.T) {
@@ -15,7 +15,7 @@ func TestConfigService_Load(t *testing.T) {
 	want.Push = true
 	want.PushURL = "https://token@github.com/org/repo.git"
 
-	store := &fakes.ConfigStore{
+	store := &portstest.ConfigStore{
 		LoadFn: func() (settings.Settings, error) { return want, nil },
 	}
 	svc := app.NewConfigService(store)
@@ -30,7 +30,7 @@ func TestConfigService_Load(t *testing.T) {
 }
 
 func TestConfigService_Load_Error(t *testing.T) {
-	store := &fakes.ConfigStore{
+	store := &portstest.ConfigStore{
 		LoadFn: func() (settings.Settings, error) { return settings.Settings{}, errors.New("no config") },
 	}
 	svc := app.NewConfigService(store)
@@ -42,7 +42,7 @@ func TestConfigService_Load_Error(t *testing.T) {
 }
 
 func TestConfigService_Save(t *testing.T) {
-	store := &fakes.ConfigStore{}
+	store := &portstest.ConfigStore{}
 	svc := app.NewConfigService(store)
 
 	cfg := settings.Default("/script")
@@ -60,7 +60,7 @@ func TestConfigService_Save(t *testing.T) {
 }
 
 func TestConfigService_Merge_NonZeroOverrides(t *testing.T) {
-	svc := app.NewConfigService(&fakes.ConfigStore{})
+	svc := app.NewConfigService(&portstest.ConfigStore{})
 
 	base := settings.Default("/script")
 	base.MaxParallel = 1
@@ -82,7 +82,7 @@ func TestConfigService_Merge_NonZeroOverrides(t *testing.T) {
 }
 
 func TestConfigService_Merge_ZeroFieldKeepsBase(t *testing.T) {
-	svc := app.NewConfigService(&fakes.ConfigStore{})
+	svc := app.NewConfigService(&portstest.ConfigStore{})
 
 	base := settings.Default("/script")
 	base.PushURL = "https://base-url"

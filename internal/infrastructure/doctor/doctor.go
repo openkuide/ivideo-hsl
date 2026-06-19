@@ -19,8 +19,8 @@ import (
 
 	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/jsonconfig"
 	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/workspacefinder"
-	"github.com/chamrong/ivideo-hls/internal/deps"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
+	"github.com/chamrong/ivideo-hls/internal/infrastructure/deps"
 )
 
 // Level expresses how badly a check failed.

@@ -9,8 +9,9 @@ import (
 // checksum means we refuse to install (safer default than "fetch and hope").
 //
 // How to populate SHA256:
-//   curl -fsSLo /tmp/bundle <url>
-//   shasum -a 256 /tmp/bundle
+//
+//	curl -fsSLo /tmp/bundle <url>
+//	shasum -a 256 /tmp/bundle
 //
 // Update-policy note: pinning by SHA is deliberate. The upstream mirrors
 // publish rolling static builds; checksums pinned here represent the exact

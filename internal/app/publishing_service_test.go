@@ -7,12 +7,12 @@ import (
 
 	"github.com/chamrong/ivideo-hls/internal/app"
 	"github.com/chamrong/ivideo-hls/internal/domain/job"
-	"github.com/chamrong/ivideo-hls/internal/testutil/fakes"
+	"github.com/chamrong/ivideo-hls/internal/ports/portstest"
 )
 
 func TestPublishingService_Publish_CallsCommitAndPush(t *testing.T) {
-	git := &fakes.GitRepository{}
-	mw := &fakes.ManifestWriter{}
+	git := &portstest.GitRepository{}
+	mw := &portstest.ManifestWriter{}
 
 	svc := app.NewPublishingService(git, mw)
 	err := svc.Publish(context.Background(), "/src/v.mp4", "/ws/hero_v", "mybranch", "https://token@github.com/org/repo.git", []string{"/ws/hero_v/x"}, "v", nil)
@@ -31,8 +31,8 @@ func TestPublishingService_Publish_CallsCommitAndPush(t *testing.T) {
 }
 
 func TestPublishingService_Publish_NoPush_SkipsPush(t *testing.T) {
-	git := &fakes.GitRepository{}
-	mw := &fakes.ManifestWriter{}
+	git := &portstest.GitRepository{}
+	mw := &portstest.ManifestWriter{}
 
 	svc := app.NewPublishingService(git, mw)
 	// empty pushURL signals skip
@@ -46,8 +46,8 @@ func TestPublishingService_Publish_NoPush_SkipsPush(t *testing.T) {
 }
 
 func TestPublishingService_Publish_WritesManifests(t *testing.T) {
-	git := &fakes.GitRepository{}
-	mw := &fakes.ManifestWriter{}
+	git := &portstest.GitRepository{}
+	mw := &portstest.ManifestWriter{}
 
 	svc := app.NewPublishingService(git, mw)
 	_ = svc.Publish(context.Background(), "/src/v.mp4", "/ws/hero_v", "mybranch", "https://url", []string{"/ws/hero_v/x"}, "v", nil)
@@ -61,8 +61,8 @@ func TestPublishingService_Publish_WritesManifests(t *testing.T) {
 }
 
 func TestPublishingService_HappyPath_AllCallsMade(t *testing.T) {
-	git := &fakes.GitRepository{}
-	mw := &fakes.ManifestWriter{}
+	git := &portstest.GitRepository{}
+	mw := &portstest.ManifestWriter{}
 
 	svc := app.NewPublishingService(git, mw)
 	err := svc.Publish(context.Background(), "/src/v.mp4", "/ws/hero_v", "mybranch", "https://token@github.com/org/repo.git", []string{"/ws/hero_v/x"}, "v", nil)
@@ -92,8 +92,8 @@ func TestPublishingService_HappyPath_AllCallsMade(t *testing.T) {
 }
 
 func TestPublishingService_PushDisabled_NoPushCall(t *testing.T) {
-	git := &fakes.GitRepository{}
-	mw := &fakes.ManifestWriter{}
+	git := &portstest.GitRepository{}
+	mw := &portstest.ManifestWriter{}
 
 	svc := app.NewPublishingService(git, mw)
 	// empty pushURL → ForcePush must NOT be called
@@ -114,12 +114,12 @@ func TestPublishingService_PushDisabled_NoPushCall(t *testing.T) {
 }
 
 func TestPublishingService_GitInitError_ReturnsError(t *testing.T) {
-	git := &fakes.GitRepository{
+	git := &portstest.GitRepository{
 		InitFn: func(_ context.Context, _, _ string) error {
 			return errors.New("init failed")
 		},
 	}
-	mw := &fakes.ManifestWriter{}
+	mw := &portstest.ManifestWriter{}
 
 	svc := app.NewPublishingService(git, mw)
 	err := svc.Publish(context.Background(), "/src/v.mp4", "/ws/hero_v", "mybranch", "https://url", []string{"/ws/hero_v/x"}, "v", nil)
@@ -129,8 +129,8 @@ func TestPublishingService_GitInitError_ReturnsError(t *testing.T) {
 }
 
 func TestPublishingService_ManifestWriteError_Continues(t *testing.T) {
-	git := &fakes.GitRepository{}
-	mw := &fakes.ManifestWriter{
+	git := &portstest.GitRepository{}
+	mw := &portstest.ManifestWriter{
 		WriteWorkspaceFn: func(_ context.Context, _ string, _ []string, _ string, _ job.Emitter) error {
 			return errors.New("write workspace failed")
 		},

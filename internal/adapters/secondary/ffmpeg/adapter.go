@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chamrong/ivideo-hls/internal/deps"
+	"github.com/chamrong/ivideo-hls/internal/infrastructure/deps"
 	"github.com/chamrong/ivideo-hls/internal/domain/job"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
 	"github.com/chamrong/ivideo-hls/internal/domain/video"

@@ -90,7 +90,7 @@ func NewPicker(a *app.App, cfg settings.Settings) (*PickerModel, error) {
 		}
 		sourceDir = wd
 	}
-	items, err := discoverVideos(sourceDir, cfg.Recursive)
+	items, err := discoverVideos(a, sourceDir, cfg.Recursive)
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +135,11 @@ func compressionIndex(c video.Compression) int {
 	return 1 // balanced is the default
 }
 
-func discoverVideos(dir string, recursive bool) ([]videoItem, error) {
-	entries, err := os.ReadDir(dir)
+func discoverVideos(a *app.App, dir string, recursive bool) ([]videoItem, error) {
+	paths, err := a.Scanner.Scan(dir, recursive)
 	if err != nil {
 		return nil, err
 	}
-	paths := video.ScanVideos(entries, dir, recursive)
 	items := make([]videoItem, 0, len(paths))
 	for _, v := range paths {
 		info, err := os.Stat(v.Path)
@@ -221,7 +220,7 @@ func (m *PickerModel) updatePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 		return m, nil
 	case "r":
-		if items, _ := discoverVideos(m.workingDir, m.recursive); items != nil {
+		if items, _ := discoverVideos(m.a, m.workingDir, m.recursive); items != nil {
 			m.items = items
 			m.cursor = 0
 		}

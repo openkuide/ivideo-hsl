@@ -5,7 +5,7 @@ import (
 
 	"github.com/chamrong/ivideo-hls/internal/app"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
-	"github.com/chamrong/ivideo-hls/internal/testutil/fakes"
+	"github.com/chamrong/ivideo-hls/internal/ports/portstest"
 )
 
 func TestApp_New_SetsAllFields(t *testing.T) {
@@ -14,14 +14,15 @@ func TestApp_New_SetsAllFields(t *testing.T) {
 	a := app.New(
 		cfg,
 		nil,
-		&fakes.Encoder{},
-		&fakes.Prober{},
-		&fakes.Splitter{},
-		&fakes.GitRepository{},
-		&fakes.ManifestWriter{},
-		&fakes.Workspace{},
-		&fakes.WorkspaceFinder{},
-		&fakes.ConfigStore{},
+		&portstest.Encoder{},
+		&portstest.Prober{},
+		&portstest.Splitter{},
+		&portstest.GitRepository{},
+		&portstest.ManifestWriter{},
+		&portstest.Workspace{},
+		&portstest.WorkspaceFinder{},
+		&portstest.ConfigStore{},
+		&portstest.VideoScanner{},
 	)
 
 	if a == nil {

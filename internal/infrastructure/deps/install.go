@@ -63,7 +63,7 @@ func installOne(ctx context.Context, b Binary, opts InstallOptions, report func(
 		return fmt.Errorf(
 			"%s: no pinned SHA256 for %s/%s — fetch the current one with:\n"+
 				"  curl -fsSL %s | shasum -a 256\n"+
-				"then update internal/deps/sources.go (or pass --skip-checksum to bypass, for dev only)",
+				"then update internal/infrastructure/deps/sources.go (or pass --skip-checksum to bypass, for dev only)",
 			b, runtime.GOOS, runtime.GOARCH, src.URL)
 	}
 

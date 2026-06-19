@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/chamrong/ivideo-hls/internal/deps"
+	"github.com/chamrong/ivideo-hls/internal/infrastructure/deps"
 )
 
 var styleOk = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")).Bold(true)

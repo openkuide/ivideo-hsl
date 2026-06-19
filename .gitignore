@@ -28,3 +28,6 @@
 /logs/*.log
 !/logs/.gitkeep
 
+# Local settings — contains credentials; managed by the TUI
+/setting.json
+

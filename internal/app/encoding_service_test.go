@@ -9,14 +9,14 @@ import (
 	"github.com/chamrong/ivideo-hls/internal/domain/job"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
 	"github.com/chamrong/ivideo-hls/internal/domain/video"
-	"github.com/chamrong/ivideo-hls/internal/testutil/fakes"
+	"github.com/chamrong/ivideo-hls/internal/ports/portstest"
 )
 
 func TestEncodingService_SingleEpisode(t *testing.T) {
-	enc := &fakes.Encoder{}
-	prober := &fakes.Prober{} // default: 10 min duration (< 30 min threshold)
-	splitter := &fakes.Splitter{} // default: returns single episode, no split
-	ws := &fakes.Workspace{}
+	enc := &portstest.Encoder{}
+	prober := &portstest.Prober{} // default: 10 min duration (< 30 min threshold)
+	splitter := &portstest.Splitter{} // default: returns single episode, no split
+	ws := &portstest.Workspace{}
 
 	svc := app.NewEncodingService(enc, prober, splitter, ws)
 	v := video.NewVideo("/src/myvideo.mp4")
@@ -38,10 +38,10 @@ func TestEncodingService_SingleEpisode(t *testing.T) {
 }
 
 func TestEncodingService_PreCompress(t *testing.T) {
-	enc := &fakes.Encoder{}
-	prober := &fakes.Prober{}
-	splitter := &fakes.Splitter{}
-	ws := &fakes.Workspace{}
+	enc := &portstest.Encoder{}
+	prober := &portstest.Prober{}
+	splitter := &portstest.Splitter{}
+	ws := &portstest.Workspace{}
 
 	svc := app.NewEncodingService(enc, prober, splitter, ws)
 	v := video.NewVideo("/src/myvideo.mp4")
@@ -69,9 +69,9 @@ func TestEncodingService_PreCompress(t *testing.T) {
 }
 
 func TestEncodingService_SplitEpisodes(t *testing.T) {
-	enc := &fakes.Encoder{}
-	prober := &fakes.Prober{}
-	splitter := &fakes.Splitter{
+	enc := &portstest.Encoder{}
+	prober := &portstest.Prober{}
+	splitter := &portstest.Splitter{
 		SplitFn: func(_ context.Context, videoPath, _ string, _ job.Emitter) ([]video.Episode, error) {
 			return []video.Episode{
 				{Path: videoPath + "_a.mp4", Suffix: "a"},
@@ -79,7 +79,7 @@ func TestEncodingService_SplitEpisodes(t *testing.T) {
 			}, nil
 		},
 	}
-	ws := &fakes.Workspace{}
+	ws := &portstest.Workspace{}
 
 	svc := app.NewEncodingService(enc, prober, splitter, ws)
 	v := video.NewVideo("/src/big.mp4")
@@ -98,10 +98,10 @@ func TestEncodingService_SplitEpisodes(t *testing.T) {
 }
 
 func TestEncodingService_WorkspaceError(t *testing.T) {
-	enc := &fakes.Encoder{}
-	prober := &fakes.Prober{}
-	splitter := &fakes.Splitter{}
-	ws := &fakes.Workspace{
+	enc := &portstest.Encoder{}
+	prober := &portstest.Prober{}
+	splitter := &portstest.Splitter{}
+	ws := &portstest.Workspace{
 		SetupFn: func(_ context.Context, _ video.Video, _ settings.Settings, _ string, _ job.Emitter) (string, error) {
 			return "", errors.New("workspace setup failed")
 		},
@@ -121,14 +121,14 @@ func TestEncodingService_WorkspaceError(t *testing.T) {
 }
 
 func TestEncodingService_CleanupAlwaysCalled(t *testing.T) {
-	enc := &fakes.Encoder{
+	enc := &portstest.Encoder{
 		ConvertToHLSFn: func(_ context.Context, _, _ string, _ settings.Settings, _ string, _ job.Emitter) error {
 			return errors.New("convert failed")
 		},
 	}
-	prober := &fakes.Prober{}
-	splitter := &fakes.Splitter{}
-	ws := &fakes.Workspace{}
+	prober := &portstest.Prober{}
+	splitter := &portstest.Splitter{}
+	ws := &portstest.Workspace{}
 
 	svc := app.NewEncodingService(enc, prober, splitter, ws)
 	v := video.NewVideo("/src/myvideo.mp4")

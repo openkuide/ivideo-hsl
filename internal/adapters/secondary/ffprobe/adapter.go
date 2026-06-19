@@ -13,7 +13,7 @@ import (
 
 	"os/exec"
 
-	"github.com/chamrong/ivideo-hls/internal/deps"
+	"github.com/chamrong/ivideo-hls/internal/infrastructure/deps"
 	"github.com/chamrong/ivideo-hls/internal/ports"
 )
 
