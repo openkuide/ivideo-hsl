@@ -119,3 +119,24 @@ func TestEncodingService_WorkspaceError(t *testing.T) {
 		t.Fatalf("want 0 ConvertToHLS calls after workspace error, got %d", len(enc.ConvertCalls))
 	}
 }
+
+func TestEncodingService_CleanupAlwaysCalled(t *testing.T) {
+	enc := &fakes.Encoder{
+		ConvertToHLSFn: func(_ context.Context, _, _ string, _ settings.Settings, _ string, _ job.Emitter) error {
+			return errors.New("convert failed")
+		},
+	}
+	prober := &fakes.Prober{}
+	splitter := &fakes.Splitter{}
+	ws := &fakes.Workspace{}
+
+	svc := app.NewEncodingService(enc, prober, splitter, ws)
+	v := video.NewVideo("/src/myvideo.mp4")
+	cfg := settings.Default("/script")
+
+	_, _ = svc.Process(context.Background(), v, cfg, "myvideo", nil)
+
+	if len(ws.CleanupCalls) == 0 {
+		t.Fatal("want Cleanup called even when ConvertToHLS errors, got 0 calls")
+	}
+}
