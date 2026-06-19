@@ -15,6 +15,12 @@ const (
 
 const BaseJob = "base"
 
+type Job struct {
+	ID        string
+	VideoPath string
+	Branch    string
+}
+
 type Result struct {
 	VideoPath string
 	Success   bool
