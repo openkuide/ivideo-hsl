@@ -3,10 +3,13 @@ package main
 import (
 	"fmt"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/chamrong/ivideo-hls/internal/deps"
 )
+
+var styleOk = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")).Bold(true)
 
 func newInstallDepsCommand() *cobra.Command {
 	var force, skipChecksum bool

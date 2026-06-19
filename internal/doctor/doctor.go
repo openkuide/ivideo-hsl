@@ -13,12 +13,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/chamrong/ivideo-hls/internal/appconfig"
+	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/jsonconfig"
+	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/workspacefinder"
 	"github.com/chamrong/ivideo-hls/internal/deps"
-	"github.com/chamrong/ivideo-hls/internal/pipeline"
+	"github.com/chamrong/ivideo-hls/internal/domain/settings"
 )
 
 // Level expresses how badly a check failed.
@@ -57,21 +59,23 @@ func (r Result) OK() bool {
 // Check runs every diagnostic and returns the collected findings.
 // Network-touching checks share the given context and its deadline.
 func Check(ctx context.Context) Result {
-	loaded, loadErr := appconfig.Load()
+	settingPath := settingFilePath()
+	store := jsonconfig.New(settingPath)
+	loaded, loadErr := store.Load()
 	token := resolveToken(loaded)
 	authMethod := resolveAuthMethod(loaded)
-	effectiveURL := appconfig.EffectiveRemoteURL(loaded.RemoteURL, token, authMethod)
+	effectiveURL := effectiveRemoteURL(loaded.RemoteURL, token, authMethod)
 
 	checks := []func() Finding{
 		checkBinary("ffmpeg", deps.FFmpegPath()),
 		checkBinary("ffprobe", deps.FFprobePath()),
 		checkGit,
-		func() Finding { return checkConfigFile(loadErr) },
+		func() Finding { return checkConfigFile(settingPath, loadErr) },
 		func() Finding { return checkRemoteURL(loaded.RemoteURL) },
 		func() Finding { return checkAuthMethod(loaded.RemoteURL, authMethod) },
 		func() Finding { return checkToken(loaded, token, authMethod) },
 		func() Finding { return checkSSHKeysIfNeeded(authMethod) },
-		func() Finding { return checkSourceDir(loaded.DefaultSourceDir) },
+		func() Finding { return checkSourceDir(loaded.SourceDir) },
 		func() Finding { return checkRemoteReachable(ctx, effectiveURL, loaded.RemoteURL) },
 		func() Finding { return checkPlaybackURL(loaded.PublicURLPattern) },
 		func() Finding { return checkPendingRetries(ctx) },
@@ -110,14 +114,13 @@ func checkGit() Finding {
 	return Finding{Level: LevelOK, Title: "git", Detail: path}
 }
 
-func checkConfigFile(loadErr error) Finding {
-	path, _ := appconfig.Path()
-	if !appconfig.Exists() {
+func checkConfigFile(path string, loadErr error) Finding {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return Finding{
 			Level:  LevelWarn,
 			Title:  "config file",
 			Detail: "not present — defaults in use",
-			Hint:   "press `s` in the picker or run `ivideo-hls --settings` to create one",
+			Hint:   "run `ivideo-hls run` to create one",
 		}
 	}
 	if loadErr != nil {
@@ -148,14 +151,14 @@ func checkRemoteURL(url string) Finding {
 			Hint:  "built-in default will be used — set one via settings to avoid surprises",
 		}
 	}
-	if err := appconfig.ValidateRemoteURL(url); err != nil {
+	if err := validateRemoteURL(url); err != nil {
 		return Finding{Level: LevelFail, Title: "remote URL", Detail: url, Hint: err.Error()}
 	}
 	return Finding{Level: LevelOK, Title: "remote URL", Detail: url}
 }
 
-func checkAuthMethod(url string, method appconfig.AuthMethod) Finding {
-	inferred := appconfig.InferAuthMethod(url, method)
+func checkAuthMethod(url string, method settings.AuthMethod) Finding {
+	inferred := inferAuthMethod(url, method)
 	if inferred != method {
 		return Finding{
 			Level:  LevelWarn,
@@ -167,8 +170,8 @@ func checkAuthMethod(url string, method appconfig.AuthMethod) Finding {
 	return Finding{Level: LevelOK, Title: "auth method", Detail: string(method)}
 }
 
-func checkToken(loaded appconfig.File, token string, method appconfig.AuthMethod) Finding {
-	if method != appconfig.AuthHTTPS {
+func checkToken(loaded settings.Settings, token string, method settings.AuthMethod) Finding {
+	if method != settings.AuthHTTPS {
 		return Finding{Level: LevelOK, Title: "token", Detail: "(not needed for " + string(method) + ")"}
 	}
 	if token == "" {
@@ -182,11 +185,11 @@ func checkToken(loaded appconfig.File, token string, method appconfig.AuthMethod
 	if loaded.Token == "" {
 		source = "from $IVIDEO_HLS_TOKEN"
 	}
-	return Finding{Level: LevelOK, Title: "token", Detail: appconfig.MaskToken(token) + "  (" + source + ")"}
+	return Finding{Level: LevelOK, Title: "token", Detail: maskToken(token) + "  (" + source + ")"}
 }
 
-func checkSSHKeysIfNeeded(method appconfig.AuthMethod) Finding {
-	if method != appconfig.AuthSSH {
+func checkSSHKeysIfNeeded(method settings.AuthMethod) Finding {
+	if method != settings.AuthSSH {
 		return Finding{Level: LevelOK, Title: "ssh keys", Detail: "(n/a)"}
 	}
 	if _, err := exec.LookPath("ssh-add"); err != nil {
@@ -212,7 +215,8 @@ func checkPendingRetries(ctx context.Context) Finding {
 	if err != nil {
 		return Finding{Level: LevelOK, Title: "pending retries", Detail: "(skipped — cwd error)"}
 	}
-	candidates, err := pipeline.FindRetryCandidates(ctx, wd)
+	finder := workspacefinder.New("git")
+	candidates, err := finder.FindRetryReady(ctx, wd)
 	if err != nil {
 		return Finding{Level: LevelOK, Title: "pending retries", Detail: "(scan failed: " + err.Error() + ")"}
 	}
@@ -239,7 +243,8 @@ func checkIncompleteWorkspaces(ctx context.Context) Finding {
 	if err != nil {
 		return Finding{Level: LevelOK, Title: "incomplete workspaces", Detail: "(skipped — cwd error)"}
 	}
-	candidates, err := pipeline.FindIncompleteWorkspaces(ctx, wd)
+	finder := workspacefinder.New("git")
+	candidates, err := finder.FindIncomplete(ctx, wd)
 	if err != nil {
 		return Finding{Level: LevelOK, Title: "incomplete workspaces", Detail: "(scan failed: " + err.Error() + ")"}
 	}
@@ -259,11 +264,11 @@ func checkIncompleteWorkspaces(ctx context.Context) Finding {
 }
 
 // checkPlaybackURL flags common shape mistakes in the HTTP(S) template used
-// by urls.txt. Push URLs (SSH) cannot serve raw files to a player, so using
+// by urls.json. Push URLs (SSH) cannot serve raw files to a player, so using
 // one as a playback URL is almost certainly a paste-by-mistake.
 func checkPlaybackURL(pattern string) Finding {
 	if pattern == "" {
-		return Finding{Level: LevelOK, Title: "playback URL", Detail: "(not set — urls.txt will log local paths)"}
+		return Finding{Level: LevelOK, Title: "playback URL", Detail: "(not set — urls.json will log local paths)"}
 	}
 	switch {
 	case strings.HasPrefix(pattern, "git@"), strings.HasPrefix(pattern, "ssh://"):
@@ -331,18 +336,73 @@ func checkRemoteReachable(ctx context.Context, effectiveURL, displayURL string) 
 
 // ---------- helpers ----------
 
-func resolveToken(loaded appconfig.File) string {
+func settingFilePath() string {
+	exe, err := os.Executable()
+	if err == nil {
+		return filepath.Join(filepath.Dir(exe), "setting.json")
+	}
+	wd, _ := os.Getwd()
+	return filepath.Join(wd, "setting.json")
+}
+
+func resolveToken(loaded settings.Settings) string {
 	if v := os.Getenv("IVIDEO_HLS_TOKEN"); v != "" {
 		return v
 	}
 	return loaded.Token
 }
 
-func resolveAuthMethod(loaded appconfig.File) appconfig.AuthMethod {
+func resolveAuthMethod(loaded settings.Settings) settings.AuthMethod {
 	if loaded.AuthMethod != "" {
 		return loaded.AuthMethod
 	}
-	return appconfig.InferAuthMethod(loaded.RemoteURL, appconfig.AuthSSH)
+	return inferAuthMethod(loaded.RemoteURL, settings.AuthSSH)
+}
+
+func inferAuthMethod(url string, current settings.AuthMethod) settings.AuthMethod {
+	switch {
+	case strings.HasPrefix(url, "https://"):
+		return settings.AuthHTTPS
+	case strings.HasPrefix(url, "git@"), strings.HasPrefix(url, "ssh://"):
+		return settings.AuthSSH
+	}
+	return current
+}
+
+func effectiveRemoteURL(displayURL, token string, method settings.AuthMethod) string {
+	if method != settings.AuthHTTPS || token == "" {
+		return displayURL
+	}
+	if !strings.HasPrefix(displayURL, "https://") {
+		return displayURL
+	}
+	// Avoid double-injection if the URL already carries userinfo.
+	if strings.Contains(displayURL[len("https://"):], "@") {
+		return displayURL
+	}
+	return "https://" + token + "@" + strings.TrimPrefix(displayURL, "https://")
+}
+
+func validateRemoteURL(url string) error {
+	switch {
+	case url == "":
+		return errors.New("remote URL is required")
+	case strings.HasPrefix(url, "git@"),
+		strings.HasPrefix(url, "ssh://"),
+		strings.HasPrefix(url, "https://"):
+		return nil
+	}
+	return errors.New("URL must start with git@, ssh://, or https://")
+}
+
+func maskToken(token string) string {
+	if token == "" {
+		return ""
+	}
+	if len(token) <= 8 {
+		return strings.Repeat("•", len(token))
+	}
+	return strings.Repeat("•", 8) + token[len(token)-4:]
 }
 
 func runOrEmpty(name string, args ...string) string {
