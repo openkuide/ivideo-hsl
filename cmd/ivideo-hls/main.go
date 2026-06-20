@@ -9,6 +9,7 @@ import (
 
 	"github.com/chamrong/ivideo-hls/internal/adapters/primary/cli"
 	"github.com/chamrong/ivideo-hls/internal/adapters/primary/tui"
+	"github.com/chamrong/ivideo-hls/internal/domain/settings"
 	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/ffmpeg"
 	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/ffprobe"
 	"github.com/chamrong/ivideo-hls/internal/adapters/secondary/gitrepo"
@@ -35,7 +36,13 @@ func main() {
 		cfg.ScriptDir = wd
 	}
 	if cfg.SourceDir == "" {
-		cfg.SourceDir = wd
+		// Auto-detect ./input/ as the default source dir (dev sandbox convention).
+		inputDir := filepath.Join(wd, "input")
+		if fi, err2 := os.Stat(inputDir); err2 == nil && fi.IsDir() {
+			cfg.SourceDir = inputDir
+		} else {
+			cfg.SourceDir = wd
+		}
 	}
 
 	enc := ffmpeg.New()
@@ -52,8 +59,10 @@ func main() {
 	root.AddCommand(newDoctorCommand(), newInstallDepsCommand())
 
 	// No subcommand → launch the interactive TUI picker.
+	// Pass the already-defaulted cfg so runTUILoop doesn't reload from disk
+	// and lose the ./input/ auto-detection applied above.
 	root.RunE = func(cmd *cobra.Command, args []string) error {
-		return runTUILoop(a)
+		return runTUILoop(a, cfg)
 	}
 
 	if err := root.Execute(); err != nil {
@@ -61,9 +70,8 @@ func main() {
 	}
 }
 
-func runTUILoop(a *app.App) error {
+func runTUILoop(a *app.App, cfg settings.Settings) error {
 	envToken := os.Getenv("IVIDEO_HLS_TOKEN")
-	cfg, _ := a.Config.Load()
 	var banner string
 
 	for {
