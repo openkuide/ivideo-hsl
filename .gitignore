@@ -31,6 +31,9 @@
 # Local settings — contains credentials; managed by the TUI
 /setting.json
 
+# Generated URL manifest — local output, not versioned
+/urls.json
+
 # AI-generated plans and specs (superpowers skill output)
 /docs/superpowers/
 
