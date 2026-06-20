@@ -31,3 +31,6 @@
 # Local settings — contains credentials; managed by the TUI
 /setting.json
 
+# AI-generated plans and specs (superpowers skill output)
+/docs/superpowers/
+

@@ -1,0 +1,34 @@
+@startuml pipeline
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontColor #1E1B4B
+skinparam defaultFontName "JetBrains Mono"
+skinparam defaultFontSize 12
+skinparam ArrowColor #4F46E5
+skinparam ActivityBorderColor #6366F1
+skinparam ActivityBackgroundColor #F5F3FF
+skinparam ActivityFontColor #1E1B4B
+skinparam ActivityStartColor #4F46E5
+skinparam ActivityEndColor #4F46E5
+skinparam PartitionBorderColor #6366F1
+skinparam PartitionFontColor #3730A3
+skinparam PartitionFontSize 11
+
+|#EEF2FF| Source |
+start
+:*.mp4 files\n(source dir or explicit -i);
+
+|#F0FDF4| Encode |
+:clone workspace\nhero_<name>/;
+:ffmpeg — HLS segments\n.ts + .m3u8;
+:rename outputs\n.ts → .married  ·  .m3u8 → .single;
+
+|#EFF6FF| Publish |
+:git commit + push\nbranch per video;
+:write urls.json manifest;
+
+|#FDF4FF| Cleanup |
+:rm hero_<name>/\n(when cfg.Cleanup = true);
+stop
+
+@enduml

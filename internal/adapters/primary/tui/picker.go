@@ -688,11 +688,15 @@ func readNum(s string, start int) (val int, length int) {
 
 // RunPicker runs the interactive video picker TUI and returns the picker model
 // after completion. Callers read model.Confirmed, model.SelectedVideos, and
-// model.WantSettings.
-func RunPicker(a *app.App, cfg settings.Settings) (*PickerModel, error) {
+// model.WantSettings. An optional banner string is displayed above the list on
+// the first render — useful for surfacing failure summaries from a prior run.
+func RunPicker(a *app.App, cfg settings.Settings, banner ...string) (*PickerModel, error) {
 	m, err := NewPicker(a, cfg)
 	if err != nil {
 		return nil, err
+	}
+	if len(banner) > 0 && banner[0] != "" {
+		m.Banner = banner[0]
 	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

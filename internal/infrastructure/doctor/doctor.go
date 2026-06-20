@@ -78,8 +78,8 @@ func Check(ctx context.Context) Result {
 		func() Finding { return checkSourceDir(loaded.SourceDir) },
 		func() Finding { return checkRemoteReachable(ctx, effectiveURL, loaded.RemoteURL) },
 		func() Finding { return checkPlaybackURL(loaded.PublicURLPattern) },
-		func() Finding { return checkPendingRetries(ctx) },
-		func() Finding { return checkIncompleteWorkspaces(ctx) },
+		func() Finding { return checkPendingRetries(ctx, loaded) },
+		func() Finding { return checkIncompleteWorkspaces(ctx, loaded) },
 	}
 
 	var findings []Finding
@@ -210,13 +210,17 @@ func checkSSHKeysIfNeeded(method settings.AuthMethod) Finding {
 // checkPendingRetries surfaces hero_<name>/ workspaces left behind by a
 // previous failed run. These are ready to push but waiting for explicit
 // action via `ivideo-hls retry-failed`.
-func checkPendingRetries(ctx context.Context) Finding {
-	wd, err := os.Getwd()
-	if err != nil {
-		return Finding{Level: LevelOK, Title: "pending retries", Detail: "(skipped — cwd error)"}
+func checkPendingRetries(ctx context.Context, cfg settings.Settings) Finding {
+	scanDir := cfg.ScriptDir
+	if scanDir == "" {
+		var err error
+		scanDir, err = os.Getwd()
+		if err != nil {
+			return Finding{Level: LevelOK, Title: "pending retries", Detail: "(skipped — cwd error)"}
+		}
 	}
 	finder := workspacefinder.New("git")
-	candidates, err := finder.FindRetryReady(ctx, wd)
+	candidates, err := finder.FindRetryReady(ctx, scanDir)
 	if err != nil {
 		return Finding{Level: LevelOK, Title: "pending retries", Detail: "(scan failed: " + err.Error() + ")"}
 	}
@@ -238,13 +242,17 @@ func checkPendingRetries(ctx context.Context) Finding {
 // checkIncompleteWorkspaces surfaces hero_<name>/ directories that stopped
 // mid-pipeline (before the playlist was finalized). Paired with pending
 // retries so the operator sees both classes of leftover work in one place.
-func checkIncompleteWorkspaces(ctx context.Context) Finding {
-	wd, err := os.Getwd()
-	if err != nil {
-		return Finding{Level: LevelOK, Title: "incomplete workspaces", Detail: "(skipped — cwd error)"}
+func checkIncompleteWorkspaces(ctx context.Context, cfg settings.Settings) Finding {
+	scanDir := cfg.ScriptDir
+	if scanDir == "" {
+		var err error
+		scanDir, err = os.Getwd()
+		if err != nil {
+			return Finding{Level: LevelOK, Title: "incomplete workspaces", Detail: "(skipped — cwd error)"}
+		}
 	}
 	finder := workspacefinder.New("git")
-	candidates, err := finder.FindIncomplete(ctx, wd)
+	candidates, err := finder.FindIncomplete(ctx, scanDir)
 	if err != nil {
 		return Finding{Level: LevelOK, Title: "incomplete workspaces", Detail: "(scan failed: " + err.Error() + ")"}
 	}

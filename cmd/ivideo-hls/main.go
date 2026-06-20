@@ -64,9 +64,11 @@ func main() {
 func runTUILoop(a *app.App) error {
 	envToken := os.Getenv("IVIDEO_HLS_TOKEN")
 	cfg, _ := a.Config.Load()
+	var banner string
 
 	for {
-		pm, err := tui.RunPicker(a, cfg)
+		pm, err := tui.RunPicker(a, cfg, banner)
+		banner = "" // consumed after first render
 		if err != nil {
 			return err
 		}
@@ -85,8 +87,16 @@ func runTUILoop(a *app.App) error {
 		for _, p := range pm.SelectedVideos {
 			videos = append(videos, video.NewVideo(p))
 		}
-		if _, err := tui.RunTUI(a, cfg, videos); err != nil {
+		results, err := tui.RunTUI(a, cfg, videos)
+		if err != nil {
 			return err
+		}
+		_, fail := app.Summary(results)
+		if fail > 0 {
+			// Return to picker with a banner so the user can adjust and retry.
+			// Workspaces are preserved on push failure for `recover`.
+			banner = fmt.Sprintf("⚠  %d video(s) failed — workspaces preserved · run `recover` to retry", fail)
+			continue
 		}
 		return nil
 	}

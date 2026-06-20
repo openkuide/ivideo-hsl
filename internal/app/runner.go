@@ -74,10 +74,20 @@ func (r *Runner) processOne(ctx context.Context, v video.Video, cfg settings.Set
 	job.Emit(e, job.LevelInfo, v.Name, job.StageQueued, "starting "+filepath.Base(v.Path))
 
 	wsDir, hlsDirs, err := r.encoding.Process(ctx, v, cfg, v.Name, e)
+	// doCleanup is set to true only when it is safe to discard the workspace:
+	// on encoding failure (workspace is incomplete) or full success (workspace
+	// is committed and pushed). On push failure the workspace is retry-ready
+	// and must be preserved for `ivideo-hls recover`.
+	doCleanup := false
 	if wsDir != "" {
-		defer r.encoding.CleanupWorkspace(wsDir, cfg, e, v.Name)
+		defer func() {
+			if doCleanup {
+				r.encoding.CleanupWorkspace(wsDir, cfg, e, v.Name)
+			}
+		}()
 	}
 	if err != nil {
+		doCleanup = true // incomplete workspace — discard
 		job.Emit(e, job.LevelError, v.Name, job.StageFailed, err.Error())
 		return job.Result{VideoPath: v.Path, Success: false, Err: err}
 	}
@@ -88,10 +98,12 @@ func (r *Runner) processOne(ctx context.Context, v video.Video, cfg settings.Set
 	}
 
 	if err := r.publishing.Publish(ctx, v.Path, wsDir, v.Branch, pushURL, hlsDirs, v.Name, e); err != nil {
+		// Push failed — preserve workspace so `recover` can push later.
 		job.Emit(e, job.LevelError, v.Name, job.StageFailed, err.Error())
 		return job.Result{VideoPath: v.Path, Success: false, Err: err}
 	}
 
+	doCleanup = true // committed and pushed — workspace no longer needed
 	job.Emit(e, job.LevelSuccess, v.Name, job.StageDone, "complete")
 	return job.Result{VideoPath: v.Path, Success: true}
 }

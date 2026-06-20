@@ -75,3 +75,12 @@ func (s *PublishingService) Publish(
 
 	return nil
 }
+
+// PushWorkspace force-pushes an already-committed workspace to the remote.
+// Used by the retry-failed / recover recovery paths to push without re-encoding.
+func (s *PublishingService) PushWorkspace(ctx context.Context, dir, branch, pushURL string) error {
+	if err := s.git.ForcePush(ctx, dir, pushURL, branch); err != nil {
+		return fmt.Errorf("git push: %w", err)
+	}
+	return nil
+}

@@ -31,23 +31,7 @@
 
 For each video, ivideo-hls runs a 7-stage pipeline:
 
-```mermaid
-flowchart LR
-    src["📂 ./input/<br/>*.mp4"] --> ws["📁 workspace<br/>clone hero/"]
-    ws --> enc["⚙️ ffmpeg<br/>HLS convert"]
-    enc --> rn["✂️ rename<br/>.ts→.married<br/>.m3u8→.single"]
-    rn --> push["🚀 git push<br/>branch per video"]
-    push --> done["✅ done<br/>cleanup"]
-
-    classDef src  fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
-    classDef proc fill:#D1FAE5,stroke:#059669,stroke-width:2px,color:#064E3B;
-    classDef git  fill:#E0F2FE,stroke:#0EA5E9,stroke-width:2px,color:#0C4A6E;
-    classDef done fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#3B0764;
-    class src src;
-    class ws,enc,rn proc;
-    class push git;
-    class done done;
-```
+<img src="docs/assets/pipeline.svg" alt="ivideo-hls pipeline" />
 
 ---
 

@@ -517,6 +517,11 @@ func (m *RunModel) logLineCount() int {
 
 func (m *RunModel) renderFooter() string {
 	if m.done {
+		counts := m.countJobs()
+		if counts.failed > 0 {
+			return styleHelp.Render(" press q to exit") + "\n" +
+				styleWarn.Render(" ⚑  run `ivideo-hls recover` to push or re-encode failed videos")
+		}
 		return styleHelp.Render(" press q to exit")
 	}
 	return styleHelp.Render(" ctrl+c cancel  ·  q quit (after done)")
