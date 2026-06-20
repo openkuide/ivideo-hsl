@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -104,6 +105,13 @@ func (r *Runner) processOne(ctx context.Context, v video.Video, cfg settings.Set
 	}
 
 	doCleanup = true // committed and pushed — workspace no longer needed
+
+	if !cfg.KeepSource {
+		if err := os.Remove(v.Path); err != nil && !os.IsNotExist(err) {
+			job.Emit(e, job.LevelWarn, v.Name, job.StageDone, "could not remove source file: "+err.Error())
+		}
+	}
+
 	job.Emit(e, job.LevelSuccess, v.Name, job.StageDone, "complete")
 	return job.Result{VideoPath: v.Path, Success: true}
 }

@@ -44,8 +44,8 @@ func (s *PublishingService) Publish(
 			"write workspace manifest: "+err.Error())
 	}
 
-	// Step 2: git init
-	if err := s.git.Init(ctx, workspaceDir, ""); err != nil {
+	// Step 2: git init — pass pushURL so the remote is set correctly.
+	if err := s.git.Init(ctx, workspaceDir, pushURL); err != nil {
 		return fmt.Errorf("git init: %w", err)
 	}
 

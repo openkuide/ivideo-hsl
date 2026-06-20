@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/chamrong/ivideo-hls/internal/domain/job"
 	"github.com/chamrong/ivideo-hls/internal/domain/settings"
@@ -45,11 +47,20 @@ func (s *EncodingService) Process(ctx context.Context, v video.Video, cfg settin
 	// Step 2: optional pre-compress
 	inputPath := v.Path
 	if cfg.PreCompress {
-		compressed, err2 := s.encoder.Compress(ctx, v, jobID, e)
-		if err2 != nil {
-			return workspaceDir, nil, fmt.Errorf("pre-compress: %w", err2)
+		// Reuse existing compressed file when the setting is on and the file is present.
+		if cfg.ResumeReuseCompressed {
+			if cp := precompressedPath(v.Path); fileExists(cp) {
+				job.Emit(e, job.LevelInfo, jobID, job.StageCompress, "reusing "+filepath.Base(cp))
+				inputPath = cp
+			}
 		}
-		inputPath = compressed
+		if inputPath == v.Path {
+			compressed, err2 := s.encoder.Compress(ctx, v, jobID, e)
+			if err2 != nil {
+				return workspaceDir, nil, fmt.Errorf("pre-compress: %w", err2)
+			}
+			inputPath = compressed
+		}
 	}
 
 	// Step 3: split decision
@@ -87,4 +98,16 @@ func (s *EncodingService) CleanupWorkspace(wsDir string, cfg settings.Settings, 
 	if cfg.Cleanup {
 		s.ws.Cleanup(wsDir, e, jobID)
 	}
+}
+
+// precompressedPath returns the path where Compress() writes its output for videoPath.
+func precompressedPath(videoPath string) string {
+	dir := filepath.Dir(videoPath)
+	base := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	return filepath.Join(dir, base+"_compressed.mp4")
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

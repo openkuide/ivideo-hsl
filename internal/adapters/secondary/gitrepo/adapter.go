@@ -66,6 +66,9 @@ func (a *Adapter) ForcePush(ctx context.Context, dir, pushURL, branch string) er
 // --- helpers ------------------------------------------------------------------
 
 func (a *Adapter) setRemote(ctx context.Context, dir, remoteURL string) error {
+	if remoteURL == "" {
+		return nil
+	}
 	out, err := exec.CommandContext(ctx, a.binaryPath, "-C", dir, "remote", "get-url", "origin").Output()
 	if err != nil {
 		return a.run(ctx, dir, "remote", "add", "origin", remoteURL)
