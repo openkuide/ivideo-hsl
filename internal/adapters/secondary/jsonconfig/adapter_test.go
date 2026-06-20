@@ -32,6 +32,8 @@ func TestAdapter_SaveLoad_Roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+	// Load always computes PushURL from RemoteURL + Token — copy it into the expected value.
+	original.PushURL = got.PushURL
 	if got != original {
 		t.Errorf("round-trip mismatch:\n got  %+v\nwant %+v", got, original)
 	}

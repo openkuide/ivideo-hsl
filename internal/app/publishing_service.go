@@ -76,9 +76,14 @@ func (s *PublishingService) Publish(
 	return nil
 }
 
-// PushWorkspace force-pushes an already-committed workspace to the remote.
+// PushWorkspace commits any unstaged HLS output then force-pushes to the remote.
 // Used by the retry-failed / recover recovery paths to push without re-encoding.
+// StageAndCommit is a no-op when nothing new is staged, so this is safe to call
+// even when the workspace was already committed.
 func (s *PublishingService) PushWorkspace(ctx context.Context, dir, branch, pushURL string) error {
+	if err := s.git.StageAndCommit(ctx, dir, "add HLS output"); err != nil {
+		return fmt.Errorf("git commit: %w", err)
+	}
 	if err := s.git.ForcePush(ctx, dir, pushURL, branch); err != nil {
 		return fmt.Errorf("git push: %w", err)
 	}

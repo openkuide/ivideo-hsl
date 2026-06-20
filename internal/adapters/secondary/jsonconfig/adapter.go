@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -51,7 +52,7 @@ func (a *Adapter) Load() (settings.Settings, error) {
 	if err := json.Unmarshal(data, &f); err != nil {
 		return settings.Settings{}, fmt.Errorf("parse %s: %w", a.path, err)
 	}
-	return settings.Settings{
+	s := settings.Settings{
 		RemoteURL:             f.RemoteURL,
 		AuthMethod:            settings.AuthMethod(f.AuthMethod),
 		Token:                 f.Token,
@@ -67,7 +68,14 @@ func (a *Adapter) Load() (settings.Settings, error) {
 		ParallelMode:          f.DefaultParallel > 1,
 		ResumeReuseCompressed: f.ResumeReuseCompressed,
 		PublicURLPattern:      f.PublicURLPattern,
-	}, nil
+	}
+	if s.Token != "" && s.RemoteURL != "" {
+		if u, err := url.Parse(s.RemoteURL); err == nil {
+			u.User = url.User(s.Token)
+			s.PushURL = u.String()
+		}
+	}
+	return s, nil
 }
 
 func (a *Adapter) Save(s settings.Settings) error {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -37,13 +36,6 @@ func main() {
 		cfg.ScriptDir = wd
 	}
 
-	// Build credential-bearing push URL from remote_url + token.
-	if cfg.PushURL == "" && cfg.RemoteURL != "" && cfg.Token != "" {
-		if u, err2 := url.Parse(cfg.RemoteURL); err2 == nil {
-			u.User = url.User(cfg.Token)
-			cfg.PushURL = u.String()
-		}
-	}
 	if cfg.SourceDir == "" {
 		// Auto-detect ./input/ as the default source dir (dev sandbox convention).
 		inputDir := filepath.Join(wd, "input")
