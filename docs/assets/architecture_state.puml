@@ -1,0 +1,44 @@
+@startuml architecture_state
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontColor #1E1B4B
+skinparam defaultFontName "JetBrains Mono"
+skinparam defaultFontSize 12
+skinparam ArrowColor #4F46E5
+skinparam state {
+  BackgroundColor #E0F2FE
+  BorderColor #0EA5E9
+  FontColor #0C4A6E
+}
+
+state "queued" as queued #E0F2FE
+state "workspace" as workspace #E0F2FE
+state "branch" as branch #E0F2FE
+state "compress" as compress #E0F2FE
+state "convert" as convert #E0F2FE
+state "rename" as rename #E0F2FE
+state "push" as push #E0F2FE
+state "done" as done #D1FAE5
+state "failed" as failed #FEE2E2
+
+[*] --> queued
+queued    --> workspace : 📁 clone hero/
+workspace --> branch    : 🌿 checkout -B name
+branch    --> compress  : ⚙️ PreCompress enabled
+branch    --> convert   : ⏩ PreCompress off
+compress  --> convert
+convert   --> rename    : ✂️ .ts → .married
+rename    --> push      : 🚀 commit + force-push
+push      --> done      : ✅ cleanup + delete source
+done      --> [*]
+
+queued    --> failed : 💥
+workspace --> failed : 💥
+branch    --> failed : 💥
+compress  --> failed : 💥
+convert   --> failed : 💥
+rename    --> failed : 💥
+push      --> failed : 💥 source kept
+failed    --> [*]
+
+@enduml

@@ -1,0 +1,41 @@
+@startuml architecture_layers
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontColor #1E1B4B
+skinparam defaultFontName "JetBrains Mono"
+skinparam defaultFontSize 11
+skinparam ArrowThickness 1.8
+skinparam PackageBorderColor #6366F1
+skinparam PackageFontColor #3730A3
+skinparam RectangleBorderThickness 2
+
+top to bottom direction
+
+rectangle "🟣 cmd/ivideo-hls\nCobra CLI · flag parsing · prereq check" as cli #EDE9FE
+
+package "🔵 Presentation layer" as presentation #E0F2FE {
+  rectangle "internal/tui\nBubble Tea · live dashboard" as tui #E0F2FE
+  rectangle "runPlain\nCI / non-TTY output" as plain #E0F2FE
+}
+
+package "🟢 Domain core  —  internal/pipeline" as domain #D1FAE5 {
+  rectangle "Runner\norchestrator · semaphores" as runner_core #D1FAE5
+  rectangle "prepareBaseHero\nsetupWorkspace\ncompressVideo\nconvertToHLS\ngit commit/push\ncleanup" as steps #D1FAE5
+  runner_core -[#059669]-> steps
+}
+
+package "⬛ OS / external tools" as os_layer #F3F4F6 {
+  rectangle "ffmpeg / ffprobe" as ffmpeg_bin #F3F4F6
+  rectangle "git" as git_bin #F3F4F6
+  rectangle "filesystem" as fs_bin #F3F4F6
+}
+
+cli -[#7C3AED]-> tui
+cli -[#7C3AED]-> plain
+tui   -[#0EA5E9]-> runner_core : 📡 Emitter
+plain -[#0EA5E9]-> runner_core : 📡 Emitter
+steps -[#6B7280]-> ffmpeg_bin
+steps -[#6B7280]-> git_bin
+steps -[#6B7280]-> fs_bin
+
+@enduml

@@ -1,0 +1,62 @@
+@startuml architecture_deps
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontColor #1E1B4B
+skinparam defaultFontName "JetBrains Mono"
+skinparam defaultFontSize 11
+skinparam ArrowColor #4F46E5
+skinparam ArrowThickness 1.8
+skinparam PackageBorderColor #6366F1
+skinparam PackageFontColor #3730A3
+skinparam RectangleBorderThickness 2
+
+top to bottom direction
+
+package "🟣  cmd/ivideo-hls  ·  CLI entry-point" as cli #EDE9FE {
+  rectangle "main\nflag wiring · prereq check · dispatch" as main #EDE9FE
+  rectangle "doctor\nrun diagnostics" as doctor_cmd #EDE9FE
+  rectangle "install-deps\ndownload ffmpeg binaries" as install #EDE9FE
+}
+
+package "🔵  internal/tui  ·  Presentation layer" as ui #E0F2FE {
+  rectangle "picker\nvideo checklist + config screen" as picker #E0F2FE
+  rectangle "settings\npersistent config editor" as settings_node #E0F2FE
+  rectangle "runner\nlive progress dashboard" as runner_ui #E0F2FE
+}
+
+package "🟢  internal/pipeline  ·  Domain core" as core #D1FAE5 {
+  rectangle "config\nConfig struct · quality enums" as config_node #D1FAE5
+  rectangle "processor\nRunner · CPU/net semaphores" as processor #D1FAE5
+  rectangle "ffmpeg\ncompress · HLS convert · rename" as ffmpeg_node #D1FAE5
+  rectangle "manifest\nurls.txt writer" as manifest_node #D1FAE5
+  rectangle "scan\nvideo discovery" as scan_node #D1FAE5
+  rectangle "events\nEvent · Emitter interface" as events_node #D1FAE5
+}
+
+rectangle "🟠 internal/appconfig\nload · save · validate config.toml" as appcfg #FEF3C7
+rectangle "🟠 internal/deps\nresolve ffmpeg/ffprobe paths" as depspkg #FEF3C7
+rectangle "🟠 internal/doctor\nenv diagnostics" as doctor_lib #FEF3C7
+
+main -[#7C3AED]-> picker
+main -[#7C3AED]-> settings_node
+main -[#7C3AED]-> runner_ui
+main -[#7C3AED]-> config_node
+main -[#7C3AED]-> appcfg
+main -[#7C3AED]-> depspkg
+doctor_cmd -[#7C3AED]-> doctor_lib
+install -[#7C3AED]-> depspkg
+
+picker -[#0EA5E9]-> scan_node
+runner_ui -[#0EA5E9]-> events_node
+settings_node -[#0EA5E9]-> appcfg
+
+processor -[#059669]-> ffmpeg_node
+processor -[#059669]-> manifest_node
+processor -[#059669]-> scan_node
+ffmpeg_node -[#059669]-> depspkg
+doctor_lib -[#059669]-> appcfg
+doctor_lib -[#059669]-> depspkg
+
+processor -[#EF4444,dashed,bold]-> runner_ui : 🚫 forbidden dependency
+
+@enduml
