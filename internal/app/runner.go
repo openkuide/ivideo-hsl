@@ -73,21 +73,13 @@ func (r *Runner) Run(ctx context.Context, videos []video.Video, cfg settings.Set
 func (r *Runner) processOne(ctx context.Context, v video.Video, cfg settings.Settings, e job.Emitter) job.Result {
 	job.Emit(e, job.LevelInfo, v.Name, job.StageQueued, "starting "+filepath.Base(v.Path))
 
-	hlsDirs, err := r.encoding.Process(ctx, v, cfg, v.Name, e)
+	wsDir, hlsDirs, err := r.encoding.Process(ctx, v, cfg, v.Name, e)
+	if wsDir != "" {
+		defer r.encoding.CleanupWorkspace(wsDir, cfg, e, v.Name)
+	}
 	if err != nil {
 		job.Emit(e, job.LevelError, v.Name, job.StageFailed, err.Error())
 		return job.Result{VideoPath: v.Path, Success: false, Err: err}
-	}
-
-	// Derive the workspace directory from the HLS output paths produced by
-	// EncodingService.  For a single-episode video the layout is:
-	//   <workspaceDir>/x/...
-	// For a split video:
-	//   <workspaceDir>/ep<suffix>/x/...
-	// In both cases, filepath.Dir(filepath.Dir(hlsDirs[0])) yields workspaceDir.
-	wsDir := ""
-	if len(hlsDirs) > 0 {
-		wsDir = filepath.Dir(filepath.Dir(hlsDirs[0]))
 	}
 
 	pushURL := ""

@@ -22,7 +22,7 @@ func TestEncodingService_SingleEpisode(t *testing.T) {
 	v := video.NewVideo("/src/myvideo.mp4")
 	cfg := settings.Default("/script")
 
-	hlsDirs, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
+	_, hlsDirs, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
 	if err != nil {
 		t.Fatalf("Process: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestEncodingService_PreCompress(t *testing.T) {
 	cfg := settings.Default("/script")
 	cfg.PreCompress = true
 
-	_, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
+	_, _, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
 	if err != nil {
 		t.Fatalf("Process: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestEncodingService_SplitEpisodes(t *testing.T) {
 	v := video.NewVideo("/src/big.mp4")
 	cfg := settings.Default("/script")
 
-	hlsDirs, err := svc.Process(context.Background(), v, cfg, "big", nil)
+	_, hlsDirs, err := svc.Process(context.Background(), v, cfg, "big", nil)
 	if err != nil {
 		t.Fatalf("Process: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestEncodingService_WorkspaceError(t *testing.T) {
 	v := video.NewVideo("/src/myvideo.mp4")
 	cfg := settings.Default("/script")
 
-	_, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
+	_, _, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
 	if err == nil {
 		t.Fatal("want error from workspace setup failure, got nil")
 	}
@@ -120,7 +120,7 @@ func TestEncodingService_WorkspaceError(t *testing.T) {
 	}
 }
 
-func TestEncodingService_CleanupAlwaysCalled(t *testing.T) {
+func TestEncodingService_ProcessReturnsWsDirOnError(t *testing.T) {
 	enc := &portstest.Encoder{
 		ConvertToHLSFn: func(_ context.Context, _, _ string, _ settings.Settings, _ string, _ job.Emitter) error {
 			return errors.New("convert failed")
@@ -133,10 +133,18 @@ func TestEncodingService_CleanupAlwaysCalled(t *testing.T) {
 	svc := app.NewEncodingService(enc, prober, splitter, ws)
 	v := video.NewVideo("/src/myvideo.mp4")
 	cfg := settings.Default("/script")
+	cfg.Cleanup = true
 
-	_, _ = svc.Process(context.Background(), v, cfg, "myvideo", nil)
-
+	wsDir, _, err := svc.Process(context.Background(), v, cfg, "myvideo", nil)
+	if err == nil {
+		t.Fatal("want error from ConvertToHLS failure, got nil")
+	}
+	// wsDir must be non-empty so the caller can clean up even after encoding fails.
+	if wsDir == "" {
+		t.Fatal("want non-empty wsDir on encoding failure so caller can clean up")
+	}
+	svc.CleanupWorkspace(wsDir, cfg, nil, "myvideo")
 	if len(ws.CleanupCalls) == 0 {
-		t.Fatal("want Cleanup called even when ConvertToHLS errors, got 0 calls")
+		t.Fatal("want Cleanup called by caller after encoding error")
 	}
 }

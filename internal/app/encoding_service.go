@@ -30,35 +30,36 @@ func NewEncodingService(enc ports.Encoder, prober ports.Prober, split ports.Spli
 //  2. Optional pre-compress (cfg.PreCompress)
 //  3. Split decision (duration > 30 min → split; else single episode)
 //  4. ConvertToHLS + RenameHLSOutputs for each episode
-//  5. Workspace cleanup (deferred)
 //
-// Returns one HLS output directory per episode.
-func (s *EncodingService) Process(ctx context.Context, v video.Video, cfg settings.Settings, jobID string, e job.Emitter) ([]string, error) {
+// Returns the workspace directory and one HLS output directory per episode.
+// The caller is responsible for calling CleanupWorkspace after publishing.
+func (s *EncodingService) Process(ctx context.Context, v video.Video, cfg settings.Settings, jobID string, e job.Emitter) (wsDir string, hlsDirs []string, err error) {
 	// Step 1: workspace setup
 	workspaceDir, err := s.ws.Setup(ctx, v, cfg, jobID, e)
 	if err != nil {
-		return nil, fmt.Errorf("workspace setup: %w", err)
+		return "", nil, fmt.Errorf("workspace setup: %w", err)
 	}
-	defer s.ws.Cleanup(workspaceDir, e, jobID)
+
+	// From here on, always return workspaceDir so the caller can clean up even on error.
 
 	// Step 2: optional pre-compress
 	inputPath := v.Path
 	if cfg.PreCompress {
-		compressed, err := s.encoder.Compress(ctx, v, jobID, e)
-		if err != nil {
-			return nil, fmt.Errorf("pre-compress: %w", err)
+		compressed, err2 := s.encoder.Compress(ctx, v, jobID, e)
+		if err2 != nil {
+			return workspaceDir, nil, fmt.Errorf("pre-compress: %w", err2)
 		}
 		inputPath = compressed
 	}
 
 	// Step 3: split decision
-	episodes, err := s.splitter.Split(ctx, inputPath, jobID, e)
-	if err != nil {
-		return nil, fmt.Errorf("split: %w", err)
+	episodes, err2 := s.splitter.Split(ctx, inputPath, jobID, e)
+	if err2 != nil {
+		return workspaceDir, nil, fmt.Errorf("split: %w", err2)
 	}
 
 	// Step 4: convert each episode to HLS
-	hlsDirs := make([]string, 0, len(episodes))
+	hlsDirs = make([]string, 0, len(episodes))
 	for _, ep := range episodes {
 		var outDir string
 		if ep.Suffix == "" {
@@ -69,14 +70,21 @@ func (s *EncodingService) Process(ctx context.Context, v video.Video, cfg settin
 
 		epJobID := jobID + ep.Suffix
 
-		if err := s.encoder.ConvertToHLS(ctx, ep.Path, outDir, cfg, epJobID, e); err != nil {
-			return nil, fmt.Errorf("convert episode %q: %w", ep.Suffix, err)
+		if err2 := s.encoder.ConvertToHLS(ctx, ep.Path, outDir, cfg, epJobID, e); err2 != nil {
+			return workspaceDir, nil, fmt.Errorf("convert episode %q: %w", ep.Suffix, err2)
 		}
-		if err := s.encoder.RenameHLSOutputs(outDir, epJobID, e); err != nil {
-			return nil, fmt.Errorf("rename episode %q: %w", ep.Suffix, err)
+		if err2 := s.encoder.RenameHLSOutputs(outDir, epJobID, e); err2 != nil {
+			return workspaceDir, nil, fmt.Errorf("rename episode %q: %w", ep.Suffix, err2)
 		}
 		hlsDirs = append(hlsDirs, outDir)
 	}
 
-	return hlsDirs, nil
+	return workspaceDir, hlsDirs, nil
+}
+
+// CleanupWorkspace removes the workspace directory when cfg.Cleanup is true.
+func (s *EncodingService) CleanupWorkspace(wsDir string, cfg settings.Settings, e job.Emitter, jobID string) {
+	if cfg.Cleanup {
+		s.ws.Cleanup(wsDir, e, jobID)
+	}
 }

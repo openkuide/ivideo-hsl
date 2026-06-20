@@ -287,10 +287,12 @@ func stepCompression(current video.Compression, delta int) video.Compression {
 }
 
 func (m *SettingsModel) save() {
-	if err := validateRemoteURL(m.current.RemoteURL); err != nil {
-		m.errorMsg = err.Error()
-		m.saveMsg = ""
-		return
+	if m.current.RemoteURL != "" {
+		if err := validateRemoteURL(m.current.RemoteURL); err != nil {
+			m.errorMsg = err.Error()
+			m.saveMsg = ""
+			return
+		}
 	}
 	if m.a != nil {
 		if err := m.a.Config.Save(m.current); err != nil {

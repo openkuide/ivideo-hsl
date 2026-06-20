@@ -55,7 +55,7 @@ func scanRecursive(root string) ([]video.Video, error) {
 			if d != nil && d.IsDir() {
 				return filepath.SkipDir
 			}
-			return nil
+			return err
 		}
 		if d.IsDir() {
 			if path != root && video.IsIgnoredDir(d.Name()) {

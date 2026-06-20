@@ -63,7 +63,7 @@ func runCmd(a *app.App) *cobra.Command {
 			ok, fail := app.Summary(results)
 			fmt.Printf("✓ %d ok · ✗ %d failed\n", ok, fail)
 			if fail > 0 {
-				os.Exit(1)
+				return fmt.Errorf("%d video(s) failed", fail)
 			}
 			return nil
 		},

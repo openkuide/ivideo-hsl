@@ -54,11 +54,12 @@ type RunModel struct {
 	a       *app.App
 	cfg     settings.Settings
 	videos  []video.Video
-	events  chan job.Event
-	ctx     context.Context
-	cancel  context.CancelFunc
-	results []job.Result
-	done    bool
+	events    chan job.Event
+	resultsCh chan []job.Result
+	ctx       context.Context
+	cancel    context.CancelFunc
+	results   []job.Result
+	done      bool
 
 	spinner spinner.Model
 	prog    progress.Model
@@ -81,14 +82,15 @@ func NewRunModel(a *app.App, cfg settings.Settings, videos []video.Video) *RunMo
 	p.ShowPercentage = true
 
 	return &RunModel{
-		a:       a,
-		cfg:     cfg,
-		videos:  videos,
-		events:  make(chan job.Event, 1024),
-		spinner: sp,
-		prog:    p,
-		jobs:    map[string]*jobState{},
-		started: time.Now(),
+		a:         a,
+		cfg:       cfg,
+		videos:    videos,
+		events:    make(chan job.Event, 1024),
+		resultsCh: make(chan []job.Result, 1),
+		spinner:   sp,
+		prog:      p,
+		jobs:      map[string]*jobState{},
+		started:   time.Now(),
 	}
 }
 
@@ -105,10 +107,10 @@ func (m *RunModel) Init() tea.Cmd {
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 	go func() {
 		results := m.a.Runner.Run(m.ctx, m.videos, m.cfg, m.emitter())
-		m.results = results
+		m.resultsCh <- results
 		close(m.events)
 	}()
-	return tea.Batch(m.spinner.Tick, waitForEvent(m.events), tickSlots())
+	return tea.Batch(m.spinner.Tick, waitForEvent(m.events, m.resultsCh), tickSlots())
 }
 
 func (m *RunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -135,7 +137,7 @@ func (m *RunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case eventMsg:
 		m.ingest(job.Event(msg))
-		return m, waitForEvent(m.events)
+		return m, waitForEvent(m.events, m.resultsCh)
 	case slotTickMsg:
 		if m.done {
 			return m, nil
@@ -238,11 +240,11 @@ func stageProgress(s job.Stage) float64 {
 	return start + span/2
 }
 
-func waitForEvent(ch <-chan job.Event) tea.Cmd {
+func waitForEvent(ch <-chan job.Event, results <-chan []job.Result) tea.Cmd {
 	return func() tea.Msg {
 		ev, ok := <-ch
 		if !ok {
-			return finishedMsg{}
+			return finishedMsg{results: <-results}
 		}
 		return eventMsg(ev)
 	}

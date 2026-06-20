@@ -324,11 +324,16 @@ func checkRemoteReachable(ctx context.Context, effectiveURL, displayURL string) 
 	out, err := cmd.CombinedOutput()
 	dur := time.Since(start).Round(time.Millisecond)
 	if err != nil {
+		// Mask any token that may appear in the error output before displaying it.
+		hint := firstLine(string(out))
+		if token := resolveToken(settings.Settings{}); token != "" {
+			hint = strings.ReplaceAll(hint, token, "***")
+		}
 		return Finding{
 			Level:  LevelFail,
 			Title:  "remote reachable",
 			Detail: fmt.Sprintf("failed in %s", dur),
-			Hint:   firstLine(string(out)),
+			Hint:   hint,
 		}
 	}
 	return Finding{Level: LevelOK, Title: "remote reachable", Detail: fmt.Sprintf("git ls-remote OK (%s)", dur)}
@@ -341,7 +346,10 @@ func settingFilePath() string {
 	if err == nil {
 		return filepath.Join(filepath.Dir(exe), "setting.json")
 	}
-	wd, _ := os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return "setting.json"
+	}
 	return filepath.Join(wd, "setting.json")
 }
 

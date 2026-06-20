@@ -220,9 +220,13 @@ func (m *PickerModel) updatePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 		return m, nil
 	case "r":
-		if items, _ := discoverVideos(m.a, m.workingDir, m.recursive); items != nil {
+		items, err := discoverVideos(m.a, m.workingDir, m.recursive)
+		if err != nil {
+			m.Banner = "rescan failed: " + err.Error()
+		} else {
 			m.items = items
 			m.cursor = 0
+			m.Banner = ""
 		}
 		return m, nil
 	case "s":
@@ -632,7 +636,11 @@ func humanBytes(b int64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/div, "KMGTPE"[exp])
+	const suffix = "KMGTPE"
+	if exp >= len(suffix) {
+		exp = len(suffix) - 1
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/div, suffix[exp])
 }
 
 func naturalLess(a, b string) bool {
