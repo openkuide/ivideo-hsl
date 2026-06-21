@@ -2,44 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [1.0.0] - 2026-06-21
 
 ### Added
-- Colored, emoji-annotated Mermaid diagrams in `docs/ARCHITECTURE.md`, `docs/PROCESS.md`, and `docs/USAGE.md`.
-- `DEVELOPMENT.md`, `CONFIGURATION.md`, `TROUBLESHOOTING.md`, and `CHANGELOG.md` docs.
-- Per-layer link colors in the package dependency diagram.
+- **Core Engine**: Single Go binary CLI (`cmd/ivideo-hls`) built using Cobra.
+- **Interactive UI**: Multi-screen Bubble Tea TUI featuring:
+  - An interactive video picker checklist with quick-select shortcuts.
+  - A persistent configuration editor.
+  - A real-time run dashboard with job progress bars, compression ratios, and active logging.
+- **Pipeline Architecture**: Per-video execution pipeline: `workspace` ➔ `branch` ➔ `compress` ➔ `convert` ➔ `rename` ➔ `push` ➔ `cleanup`.
+- **Media Processing**:
+  - Optional pre-compression pass (using `libx264` at `crf=28`) to optimize size.
+  - Streamlined HLS segmentation with customizable quality presets: `low` (480p), `medium` (720p), and `high` (1080p).
+  - Configurable encoding speed presets: `fast`, `balanced`, and `best`.
+  - Multi-job concurrency with separate semaphores for video encoding (CPU-bound) and git pushing (network-bound).
+- **Git Publishing**: Automatic branch isolation—commits and pushes HLS outputs to dedicated video-specific Git branches.
+- **Recovery Utilities**:
+  - `doctor`: Diagnoses system dependencies (`ffmpeg`, `ffprobe`, `git`) and SSH/token credentials.
+  - `retry-failed`: Re-attempts pushing finished workspaces on network failures.
+  - `resume-failed`: Cleans and restarts interrupted conversion pipelines from source.
+  - `recover`: A unified CLI command to triage and run both retry and resume phases sequentially.
+- **CI/CD & Scripting Support**:
+  - Non-interactive mode (`--no-tui`) with standard log streams and status exit codes.
+  - Overrides for custom Git remotes, HTTPS authentication tokens, and directories.
+  - Safe token scrubbing from console outputs and logs.
+- **Documentation**:
+  - Complete technical specs: `ARCHITECTURE.md` (featuring C4-style Mermaid diagrams), `FUNCTIONAL_SPEC.md`, and `PROCESS.md`.
+  - User and developer guides: `USAGE.md`, `CONFIGURATION.md`, `TROUBLESHOOTING.md`, and `DEVELOPMENT.md`.
 
-### Changed
-- All architecture diagrams upgraded from plain Mermaid to C4-style with consistent color palette.
-- `docs/USAGE.md` expanded with full keybinding tables, screen mockups, and recipe examples.
-
-### Removed
-- `plans/` directory.
-- All Claude/Claude Code tooling references.
-
----
-
-## [1.0.0] — Initial release
-
-### Added
-- Single Go binary CLI (`cmd/ivideo-hls`) built with Cobra.
-- Bubble Tea TUI with two-screen picker (video checklist → config) and live run dashboard.
-- Per-video pipeline: `workspace → branch → compress → convert → rename → push → cleanup`.
-- Optional pre-compression pass (`libx264 crf=28`) before HLS segmentation.
-- Quality presets: `low` (480p · 800k), `medium` (720p · 2.8M), `high` (1080p · 5M).
-- Compression presets: `fast`, `balanced`, `best` (maps to ffmpeg `-preset`).
-- Parallel execution with independent CPU semaphore (ffmpeg) and net semaphore (git push).
-- `install-deps` — downloads pinned static ffmpeg/ffprobe builds; SHA-256 verified.
-- `doctor` — read-only env diagnostics with ✓/!/✗ output and remediation hints.
-- `retry-failed` — force-push workspaces that have a finalized playlist but unpushed commit.
-- `resume-failed` — delete partial workspaces and re-run the full pipeline from source.
-- Persistent config via `~/.config/ivideo-hls/config.toml` with TUI settings editor.
-- Playback URL template (`{branch}`, `{filename}`) and per-directory `urls.txt` manifest.
-- Token credential hygiene — secrets scrubbed from all log output.
-- Recursive source directory scan with extension allowlist and pruned directories.
-- `--no-push`, `--no-cleanup`, `--keep-source`, `--no-tui` escape hatches.
-- Plain-log mode for CI (`--no-tui`) with exit code `0` / `1`.
